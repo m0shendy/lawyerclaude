@@ -1,0 +1,123 @@
+# =============================================================================
+# Kong declarative config TEMPLATE — infra/volumes-template/api/kong.yml
+# =============================================================================
+# The provision script renders this file (envsubst: ${ANON_KEY},
+# ${SERVICE_ROLE_KEY}) into <firm-dir>/volumes/api/kong.yml, which
+# docker-compose mounts read-only into the kong container.
+#
+# Standard Supabase self-host gateway pattern:
+#   - key-auth: every request must present the firm's anon or service_role JWT
+#     as an `apikey` (header or query) — keys are FRESH per firm. [C-XI]
+#   - acl: anon endpoints admit both consumers; admin-ish surfaces could be
+#     restricted to the `admin` group if needed.
+# Routes:
+#   /auth/v1/*    -> GoTrue   (auth:9999)
+#   /rest/v1/*    -> PostgREST(rest:3000)
+#   /storage/v1/* -> Storage  (storage:5000)
+# =============================================================================
+
+_format_version: "2.1"
+_transform: true
+
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: ${ANON_KEY}
+  - username: service_role
+    keyauth_credentials:
+      - key: ${SERVICE_ROLE_KEY}
+
+acls:
+  - consumer: anon
+    group: anon
+  - consumer: service_role
+    group: admin
+
+services:
+  # ---------------------------------------------------------------------------
+  # GoTrue — auth
+  # ---------------------------------------------------------------------------
+  - name: auth-v1-open
+    url: http://auth:9999/verify
+    routes:
+      - name: auth-v1-open
+        strip_path: true
+        paths:
+          - /auth/v1/verify
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-callback
+    url: http://auth:9999/callback
+    routes:
+      - name: auth-v1-open-callback
+        strip_path: true
+        paths:
+          - /auth/v1/callback
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-authorize
+    url: http://auth:9999/authorize
+    routes:
+      - name: auth-v1-open-authorize
+        strip_path: true
+        paths:
+          - /auth/v1/authorize
+    plugins:
+      - name: cors
+
+  - name: auth-v1
+    url: http://auth:9999/
+    routes:
+      - name: auth-v1-all
+        strip_path: true
+        paths:
+          - /auth/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  # ---------------------------------------------------------------------------
+  # PostgREST — rest
+  # ---------------------------------------------------------------------------
+  - name: rest-v1
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-all
+        strip_path: true
+        paths:
+          - /rest/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: true
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  # ---------------------------------------------------------------------------
+  # Storage — files (no key-auth here; Storage validates its own JWTs and
+  # public-object access — standard supabase self-host pattern)
+  # ---------------------------------------------------------------------------
+  - name: storage-v1
+    url: http://storage:5000/
+    routes:
+      - name: storage-v1-all
+        strip_path: true
+        paths:
+          - /storage/v1/
+    plugins:
+      - name: cors

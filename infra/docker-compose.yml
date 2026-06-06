@@ -1,0 +1,356 @@
+# =============================================================================
+# Per-firm stack — ONE compose project per law firm  [Constitution C-I]
+# =============================================================================
+# Physical isolation: each firm gets its OWN copy of this stack (own database,
+# own auth, own storage, own backend). Firms NEVER share a database.
+#
+# The compose project name (= firm slug) is set via COMPOSE_PROJECT_NAME in the
+# adjacent .env file, which the provision script writes from env.template.
+# All ${VARS} below are interpolated from that .env.
+#
+# Networks:
+#   internal — private bridge for this stack only (db, kong, workers, …).
+#   proxy    — external network shared with the host-level Traefik
+#              (infra/traefik/). ONLY frontend, backend and kong join it.
+#
+# Public entrypoints (routed by Traefik, TLS via DNS-01 wildcard):
+#   https://${FIRM_DOMAIN}            -> frontend :3000
+#   https://api.${FIRM_DOMAIN}        -> backend  :8000
+#   https://supabase.${FIRM_DOMAIN}   -> kong     :8000  (GoTrue/PostgREST/Storage)
+#
+# Supabase Studio is NEVER exposed publicly — it binds to 127.0.0.1 on the host
+# and is reached via SSH tunnel only.  [C-XI]
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Postgres 15 + pgvector (Supabase image ships pgvector built in)  [C-XII]
+  # ---------------------------------------------------------------------------
+  db:
+    image: supabase/postgres:15.8.1.085
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: "5432"
+      # The Supabase image provisions auth/storage roles and reads these:
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: "3600"
+    volumes:
+      - ./volumes/db:/var/lib/postgresql/data
+      # Sets passwords for the internal login roles (supabase_auth_admin,
+      # authenticator, supabase_storage_admin, pgbouncer) on fresh init.
+      # Without this, auth/rest/storage fail SASL auth and crash-loop.
+      - ./volumes/db-init/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------------
+  # GoTrue — auth (co-located with data; no split cloud auth)  [C-XII]
+  # ---------------------------------------------------------------------------
+  auth:
+    image: supabase/gotrue:v2.164.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL}
+
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+
+      GOTRUE_SITE_URL: ${SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
+
+      # Self-service signup is DISABLED: the partner/manager creates users via
+      # the GoTrue admin API (service_role key) from the backend.
+      GOTRUE_DISABLE_SIGNUP: "true"
+
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+
+      # Admin-created users are confirmed directly; no public mail flows.
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_SMS_AUTOCONFIRM: "false"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9999/health",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------------
+  # PostgREST — needed by supabase-js (rest/v1)
+  # ---------------------------------------------------------------------------
+  rest:
+    image: postgrest/postgrest:v12.2.3
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: "3600"
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------------
+  # Storage API — file backend on a local volume (per-firm, isolated)
+  # ---------------------------------------------------------------------------
+  storage:
+    image: supabase/storage-api:v1.11.13
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      POSTGREST_URL: http://rest:3000
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      FILE_SIZE_LIMIT: "52428800"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+    volumes:
+      - ./volumes/storage:/var/lib/storage
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------------
+  # Kong — single public Supabase entrypoint (auth/v1, rest/v1, storage/v1).
+  # Declarative config is copied into place by the provision script from
+  # infra/volumes-template/api/kong.yml (with the firm's keys substituted).
+  # ---------------------------------------------------------------------------
+  kong:
+    image: kong:2.8.1
+    restart: unless-stopped
+    depends_on:
+      auth:
+        condition: service_healthy
+      rest:
+        condition: service_started
+      storage:
+        condition: service_started
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+    volumes:
+      - ./volumes/api/kong.yml:/home/kong/kong.yml:ro
+    networks:
+      - internal
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.${FIRM_SLUG}-supabase.rule=Host(`supabase.${FIRM_DOMAIN}`)"
+      - "traefik.http.routers.${FIRM_SLUG}-supabase.entrypoints=websecure"
+      - "traefik.http.routers.${FIRM_SLUG}-supabase.tls.certresolver=letsencrypt"
+      # One wildcard cert per firm covers FIRM_DOMAIN and *.FIRM_DOMAIN:
+      - "traefik.http.routers.${FIRM_SLUG}-supabase.tls.domains[0].main=${FIRM_DOMAIN}"
+      - "traefik.http.routers.${FIRM_SLUG}-supabase.tls.domains[0].sans=*.${FIRM_DOMAIN}"
+      - "traefik.http.services.${FIRM_SLUG}-supabase.loadbalancer.server.port=8000"
+
+  # ---------------------------------------------------------------------------
+  # Supabase Studio — admin UI. NO public route, NO Traefik labels.
+  # Bound to 127.0.0.1 on the host; access via SSH tunnel only.  [C-XI]
+  #   ssh -L 54323:127.0.0.1:54323 <host>   then open http://localhost:54323
+  # ---------------------------------------------------------------------------
+  studio:
+    image: supabase/studio:20241028-a265374
+    restart: unless-stopped
+    depends_on:
+      meta:
+        condition: service_started
+      kong:
+        condition: service_started
+    ports:
+      - "127.0.0.1:54323:3000"
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DEFAULT_ORGANIZATION_NAME: ${FIRM_SLUG}
+      DEFAULT_PROJECT_NAME: ${FIRM_SLUG}
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: https://supabase.${FIRM_DOMAIN}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------------
+  # postgres-meta — required by Studio
+  # ---------------------------------------------------------------------------
+  meta:
+    image: supabase/postgres-meta:v0.84.2
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: "8080"
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: "5432"
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: postgres
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------------
+  # Backend — FastAPI AI engine (Retriever / LLM / Scheduler API surface)
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ${BACKEND_CONTEXT:-../backend}
+    image: ${FIRM_SLUG}-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-credentials.json
+    volumes:
+      - ./secrets/google-credentials.json:/run/secrets/google-credentials.json:ro
+    networks:
+      - internal
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.${FIRM_SLUG}-api.rule=Host(`api.${FIRM_DOMAIN}`)"
+      - "traefik.http.routers.${FIRM_SLUG}-api.entrypoints=websecure"
+      - "traefik.http.routers.${FIRM_SLUG}-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${FIRM_SLUG}-api.tls.domains[0].main=${FIRM_DOMAIN}"
+      - "traefik.http.routers.${FIRM_SLUG}-api.tls.domains[0].sans=*.${FIRM_DOMAIN}"
+      - "traefik.http.services.${FIRM_SLUG}-api.loadbalancer.server.port=8000"
+
+  # ---------------------------------------------------------------------------
+  # Pipeline worker — document pipeline (OCR -> normalize -> chunk -> embed).
+  # Same image as backend, different entrypoint. No ports.  [C-VII]
+  # ---------------------------------------------------------------------------
+  worker-pipeline:
+    build:
+      context: ${BACKEND_CONTEXT:-../backend}
+    image: ${FIRM_SLUG}-backend
+    restart: unless-stopped
+    command: python -m workers.pipeline_worker
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-credentials.json
+    volumes:
+      - ./secrets/google-credentials.json:/run/secrets/google-credentials.json:ro
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------------
+  # Scheduler worker — DETERMINISTIC reminders/reports (never an agent).  [C-IV]
+  # Same image as backend, different entrypoint. No ports.
+  # ---------------------------------------------------------------------------
+  worker-scheduler:
+    build:
+      context: ${BACKEND_CONTEXT:-../backend}
+    image: ${FIRM_SLUG}-backend
+    restart: unless-stopped
+    command: python -m workers.scheduler_worker
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------------
+  # Frontend — Next.js 14 RTL Arabic dashboard
+  # NEXT_PUBLIC_* values are baked at build time (Next.js), hence build args.
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ${FRONTEND_CONTEXT:-../frontend}
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    image: ${FIRM_SLUG}-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+      kong:
+        condition: service_started
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    networks:
+      - internal
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.${FIRM_SLUG}-app.rule=Host(`${FIRM_DOMAIN}`)"
+      - "traefik.http.routers.${FIRM_SLUG}-app.entrypoints=websecure"
+      - "traefik.http.routers.${FIRM_SLUG}-app.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${FIRM_SLUG}-app.tls.domains[0].main=${FIRM_DOMAIN}"
+      - "traefik.http.routers.${FIRM_SLUG}-app.tls.domains[0].sans=*.${FIRM_DOMAIN}"
+      - "traefik.http.services.${FIRM_SLUG}-app.loadbalancer.server.port=3000"
+
+networks:
+  # Stack-private bridge. Not docker `internal: true` because backend/workers
+  # need outbound access (Document AI, LLM API, WAHA) — but no host ports are
+  # published on it, so nothing on it is reachable from outside.
+  internal:
+    driver: bridge
+  # Shared with the host-level Traefik (infra/traefik). Create once per host:
+  #   docker network create proxy
+  proxy:
+    external: true

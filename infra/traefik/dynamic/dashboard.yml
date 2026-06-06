@@ -1,0 +1,30 @@
+# =============================================================================
+# Traefik dynamic config — dashboard router (localhost-only + basic auth)
+# =============================================================================
+# The `dashboard` entrypoint is published as 127.0.0.1:8081 ONLY, so this
+# router is unreachable from the network. Basic auth is defense in depth.
+# Access from your workstation:
+#   ssh -L 8081:127.0.0.1:8081 <host>   then open http://localhost:8081
+#
+# Generate the credential and replace the placeholder below (keep $$ escaping
+# OUT of file-provider configs — single $ is correct here, unlike labels):
+#   htpasswd -nB admin
+# =============================================================================
+
+http:
+  routers:
+    traefik-dashboard:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - dashboard
+      service: api@internal
+      middlewares:
+        - dashboard-auth
+
+  middlewares:
+    dashboard-auth:
+      basicAuth:
+        users:
+          # CHANGE ME — output of `htpasswd -nB admin`. NEVER keep a default
+          # credential on a real host. [C-XI]
+          - "admin:$2y$05$CHANGE_ME_REPLACE_WITH_REAL_BCRYPT_HASH_FROM_HTPASSWD"

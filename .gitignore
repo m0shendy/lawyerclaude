@@ -1,0 +1,45 @@
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+dist/
+build/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Env & secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+infra/**/secrets/
+infra/traefik/acme.json
+gcp-credentials*.json
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# IDE
+.vscode/
+.idea/
+
+# Backups & data
+infra/backup/output/
+supabase/volumes/
+shared-corpus/data/
+shared-corpus/output/

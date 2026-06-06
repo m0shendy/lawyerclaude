@@ -1,0 +1,57 @@
+# =============================================================================
+# Traefik v3 static configuration — one per HOST
+# =============================================================================
+
+# No version pinning needed in v3 static config.
+
+api:
+  dashboard: true
+  # Dashboard is exposed only through the localhost-bound `dashboard`
+  # entrypoint via a router defined in dynamic/dashboard.yml (basic-auth
+  # protected). insecure mode stays OFF. [C-XI]
+  insecure: false
+
+log:
+  level: INFO
+
+accessLog: {}
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+  # Localhost-only dashboard entrypoint (published as 127.0.0.1:8081).
+  dashboard:
+    address: ":8081"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    # Firm stacks must opt in explicitly with traefik.enable=true.
+    exposedByDefault: false
+    network: proxy
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      # EDIT BEFORE FIRST RUN: Traefik static config does NOT expand env vars.
+      # Set the operator's real email (Let's Encrypt expiry notices).
+      email: CHANGE_ME@example.com
+      storage: /acme.json
+      # DNS-01 — required for wildcard certificates (*.firm.domain).
+      dnsChallenge:
+        provider: cloudflare
+        # Public resolvers avoid split-horizon DNS confusing propagation checks.
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"

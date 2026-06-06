@@ -1,0 +1,51 @@
+# =============================================================================
+# Traefik — reverse proxy + wildcard TLS. ONE instance PER HOST (not per firm).
+# =============================================================================
+# Firm stacks (infra/docker-compose.yml) attach to the external `proxy`
+# network and register routes via container labels. Traefik terminates TLS
+# with Let's Encrypt wildcard certs obtained via DNS-01 (Cloudflare).
+#
+# Setup (see README.md in this directory):
+#   docker network create proxy
+#   cp .env.traefik.template .env        # set ACME_EMAIL + CF_DNS_API_TOKEN
+#   touch acme.json && chmod 600 acme.json
+#   docker compose -f docker-compose.traefik.yml up -d
+#
+# Dashboard: NOT public. Served on a dedicated entrypoint bound to
+# 127.0.0.1:8081 and protected by basic auth — reachable via SSH tunnel only.
+# [C-XI]
+# =============================================================================
+
+services:
+  traefik:
+    image: traefik:v3.2
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # Cloudflare API token (Zone:DNS:Edit on the zone) for DNS-01. SECRET —
+      # set in .env next to this file; never commit. [C-XI]
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
+    ports:
+      - "80:80"
+      - "443:443"
+      # Dashboard entrypoint — localhost ONLY (SSH tunnel to reach it).
+      - "127.0.0.1:8081:8081"
+    volumes:
+      # Static config (entrypoints, providers, ACME resolver).
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      # Dynamic config (dashboard router + basic auth middleware).
+      - ./dynamic:/etc/traefik/dynamic:ro
+      # ACME certificate store — create empty with chmod 600 before first run.
+      - ./acme.json:/acme.json
+      # Docker provider socket (read-only).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy
+
+networks:
+  # Shared with every firm stack on this host. Create once:
+  #   docker network create proxy
+  proxy:
+    external: true
