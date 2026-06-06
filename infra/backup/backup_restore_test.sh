@@ -182,8 +182,15 @@ do_restore_test() {
   docker cp "$latest_dump" "${scratch}:/tmp/firm.dump" >/dev/null
   docker exec "$scratch" sh -c \
     "pg_restore -l /tmp/firm.dump | grep -viE 'vault|pgsodium' > /tmp/firm.toc"
+  # --disable-triggers: prevents audit triggers firing on restored rows.
+  # Without this, triggers fire without the required GUCs (app.user_id etc.)
+  # which can cause unexpected failures or audit_log noise during restore.
+  # Triggers are structural (preserved in the dump) — disabling them here
+  # only suppresses their execution during the data-load phase; they remain
+  # fully active after restore completes.  [T101 fix]
   if ! docker exec "$scratch" pg_restore -U postgres -d "$rdb" \
-         --no-owner --exit-on-error -L /tmp/firm.toc /tmp/firm.dump; then
+         --no-owner --disable-triggers --exit-on-error \
+         -L /tmp/firm.toc /tmp/firm.dump; then
     err "pg_restore FAILED"
     echo "RESULT: FAIL — dump did not restore cleanly."
     exit 1

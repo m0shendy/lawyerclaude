@@ -97,20 +97,28 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
     from app.api import (
         ai_outputs,
+        analytics,
         assignments,
         assistant,
         audit,
         auth,
+        billing,
         cases,
+        contacts,
+        correspondence,
         deadlines,
         documents,
+        hearings,
+        portal,
         references,
         reports,
         settings,
         tasks,
+        templates,
         users,
     )
 
+    # Core
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(cases.router)
@@ -124,6 +132,15 @@ def create_app() -> FastAPI:
     app.include_router(references.router)
     app.include_router(settings.router)
     app.include_router(audit.router)
+
+    # Expansion modules (Phase 14–21)
+    app.include_router(contacts.router,      tags=["contacts"])
+    app.include_router(billing.router,       tags=["billing"])
+    app.include_router(hearings.router,      tags=["hearings"])
+    app.include_router(templates.router,     tags=["templates"])
+    app.include_router(correspondence.router, tags=["correspondence"])
+    app.include_router(analytics.router,     tags=["analytics"])
+    app.include_router(portal.router)  # prefix="/portal" set in router
 
     return app
 
