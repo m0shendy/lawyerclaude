@@ -34,6 +34,19 @@ law firms. Arabic RTL dashboard over a Python AI engine, self-hosted Supabase pe
 - **OCR**: Google Document AI (live intake); Foxit Pro + direct extraction (shared corpus, once).
 - **LLM**: client-provided key (default rec. Gemini 3.1 Pro); embeddings separate/cheaper.
 
+## Tunables — finalized defaults (T104)
+
+Defaults live in `backend/app/core/config.py` and per-firm `firm_settings`. Current
+values (tune at the documented checkpoints):
+
+- **OCR confidence threshold**: `0.80` — below → document flagged `low_confidence` [C-VII].
+- **Chunking**: `800` tokens, `120` overlap (research.md R3).
+- **Embeddings**: dimension `1536` (R1); model per firm (`firm_settings.embedding_config`,
+  e.g. `gemini-embedding-001`). LLM generation model default `models/gemini-2.0-flash`.
+- **Retrieval**: `top_k=8` per corpus, pgvector HNSW cosine.
+- **Reminder lead points**: `7d, 3d, 1d, 0d` (firm-configurable in Settings).
+- **Scheduler (Africa/Cairo)**: reminders at `08:00`, manager reports at `08:30`.
+
 ## Architecture invariants (do not violate)
 
 - AI is **three separate components**: (A) deterministic Retriever, (B) generation-only LLM,

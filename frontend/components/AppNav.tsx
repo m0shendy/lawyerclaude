@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { href: '/deadlines', label: 'المواعيد والالتزامات', roles: ALL },
   { href: '/tasks', label: 'المهام', roles: ['partner_manager', 'lawyer', 'paralegal'] },
   { href: '/assistant', label: 'المساعد الذكي', roles: ALL },
+  { href: '/references', label: 'البحث في المراجع', roles: ALL },
   { href: '/reports', label: 'التقارير', roles: ['partner_manager'] },
   { href: '/users', label: 'المستخدمون والأدوار', roles: ['partner_manager'] },
   { href: '/audit', label: 'سجل التدقيق', roles: ['partner_manager'] },

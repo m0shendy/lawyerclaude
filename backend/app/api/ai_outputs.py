@@ -40,7 +40,9 @@ from app.core.db import Db
 from app.core.errors import ApiError
 from app.core.rbac import LAWYER, MANAGER, assert_case_access, is_assigned_to_case, require_roles
 from app.core.security import CurrentUser, CurrentUserDep
+from app.llm.contract_analysis import analyze_contract
 from app.llm.generate import LlmError, SUMMARIZE_INSTRUCTION, build_prompt, generate
+from app.llm.risk_signals import detect_risk_signals
 from app.models import AiOutput, AiOutputType, ReviewState, SourceLink
 from app.retriever.retrieve import RetrievedChunk, retrieve
 
@@ -290,6 +292,139 @@ async def summarize_document(
     return SummarizeResponse(
         summary_output=summary_output,
         extraction_output=extraction_output,
+    )
+
+
+# ── document-scoped generation prep (shared by analyze/risk) ──────────────────
+
+
+async def _prepare_doc_generation(
+    conn, user, document_id: UUID, *, retrieval_query: str
+) -> tuple[dict, list[RetrievedChunk], str, bool]:
+    """Load+authorize a document, read firm LLM config, and retrieve its chunks.
+
+    Returns ``(doc_row, chunks, llm_model, low_confidence_flag)``. Raises the same
+    ApiErrors as summarize for missing/invalid documents or empty retrieval.
+    """
+    doc_row = await conn.fetchrow(
+        "SELECT id, case_id, status, ocr_confidence FROM documents WHERE id = $1",
+        document_id,
+    )
+    if doc_row is None:
+        raise ApiError(404, "not_found", "المستند غير موجود")
+    await assert_case_access(conn, user, doc_row["case_id"])
+    if doc_row["status"] not in ("ready", "low_confidence"):
+        raise ApiError(
+            400,
+            "invalid_state",
+            f"لا يمكن تحليل مستند بالحالة «{doc_row['status']}» — انتظر اكتمال المعالجة",
+        )
+    low_confidence_flag = doc_row["status"] == "low_confidence"
+
+    firm = await conn.fetchrow(
+        "SELECT llm_api_key, embedding_config FROM firm_settings LIMIT 1"
+    )
+    if firm is None:
+        raise ApiError(500, "config_error", "إعدادات المكتب غير موجودة")
+    api_key: str = firm["llm_api_key"] or ""
+    emb_cfg = firm["embedding_config"]
+    if isinstance(emb_cfg, str):
+        emb_cfg = json.loads(emb_cfg)
+    llm_model = (emb_cfg or {}).get("llm_model", "models/gemini-2.0-flash")
+
+    chunks = await retrieve(
+        query=retrieval_query,
+        conn=conn,
+        api_key=api_key,
+        embedding_config=emb_cfg or {},
+        document_id=document_id,
+        include_shared=False,
+    )
+    if not chunks:
+        raise ApiError(422, "no_chunks", "لا توجد مقاطع قابلة للاسترجاع في هذا المستند")
+
+    # Stash the resolved key on the row dict for the caller.
+    return ({**dict(doc_row), "_api_key": api_key}, chunks, llm_model, low_confidence_flag)
+
+
+# ── POST /documents/{id}/analyze-contract (T091) [C-II][C-V] ──────────────────
+
+
+@router.post(
+    "/documents/{document_id}/analyze-contract",
+    response_model=list[AiOutput],
+    status_code=201,
+)
+async def analyze_contract_document(
+    document_id: UUID, user: CurrentUserDep, conn: Db
+) -> list[AiOutput]:
+    """Analyze a contract → grounded ``analysis`` + ``clause_flag`` drafts. [C-II][C-V]"""
+    doc_row, chunks, model, low_flag = await _prepare_doc_generation(
+        conn, user, document_id, retrieval_query="تحليل بنود العقد والبنود الناقصة"
+    )
+    try:
+        result = await analyze_contract(chunks, api_key=doc_row["_api_key"], model=model)
+    except LlmError as exc:
+        raise ApiError(502, "llm_error", str(exc)) from exc
+
+    source_links = _build_source_links(chunks)
+    analysis = await _create_ai_output(
+        conn,
+        document_id=document_id,
+        case_id=doc_row["case_id"],
+        output_type="analysis",
+        content=result,
+        source_links=source_links,
+        low_confidence_flag=low_flag,
+        model=model,
+    )
+    clause_flag = await _create_ai_output(
+        conn,
+        document_id=document_id,
+        case_id=doc_row["case_id"],
+        output_type="clause_flag",
+        content={
+            "البنود_الناقصة": result.get("البنود_الناقصة", []),
+            "البنود_غير_المعتادة": result.get("البنود_غير_المعتادة", []),
+            "raw_text": result.get("raw_text", ""),
+            "context_count": result.get("context_count", 0),
+        },
+        source_links=source_links,
+        low_confidence_flag=low_flag,
+        model=model,
+    )
+    return [analysis, clause_flag]
+
+
+# ── POST /documents/{id}/risk-signals (T097) [C-II][C-VIII] ───────────────────
+
+
+@router.post(
+    "/documents/{document_id}/risk-signals",
+    response_model=AiOutput,
+    status_code=201,
+)
+async def risk_signals_document(
+    document_id: UUID, user: CurrentUserDep, conn: Db
+) -> AiOutput:
+    """Surface grounded risk *signals* (no prediction) as a draft. [C-II][C-VIII]"""
+    doc_row, chunks, model, low_flag = await _prepare_doc_generation(
+        conn, user, document_id, retrieval_query="إشارات ومخاطر تستحق انتباه المحامي"
+    )
+    try:
+        result = await detect_risk_signals(chunks, api_key=doc_row["_api_key"], model=model)
+    except LlmError as exc:
+        raise ApiError(502, "llm_error", str(exc)) from exc
+
+    return await _create_ai_output(
+        conn,
+        document_id=document_id,
+        case_id=doc_row["case_id"],
+        output_type="risk_signal",
+        content=result,
+        source_links=_build_source_links(chunks),
+        low_confidence_flag=low_flag,
+        model=model,
     )
 
 

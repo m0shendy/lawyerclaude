@@ -104,6 +104,7 @@ def create_app() -> FastAPI:
         cases,
         deadlines,
         documents,
+        references,
         reports,
         settings,
         tasks,
@@ -120,6 +121,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router)
     app.include_router(reports.router)
     app.include_router(assistant.router)
+    app.include_router(references.router)
     app.include_router(settings.router)
     app.include_router(audit.router)
 

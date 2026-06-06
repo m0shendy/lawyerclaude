@@ -18,20 +18,24 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 from pydantic import BaseModel, Field
 
-from app.core.db import Db
+from app.core.config import get_settings
+from app.core.db import Db, db_connection
 from app.core.errors import ApiError
 from app.core.rbac import assert_case_access
-from app.core.security import CurrentUserDep
+from app.core.security import CurrentUser, CurrentUserDep
 from app.llm.assistant import answer_query
 from app.llm.generate import LlmError
 from app.models import SourceLink
 from app.pipeline.embed import EmbedError
 from app.retriever.scoped import retrieve_scoped
+from app.scheduler.waha import WahaError, send_text
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +128,120 @@ async def assistant_query(
         grounded=True,
         saved_output_id=saved_id,
     )
+
+
+# ── inbound WhatsApp channel (T082, T083) [C-I] ───────────────────────────────
+
+_REFUSAL = (
+    "عذراً، لا يمكنني الرد. هذا الرقم غير مسجَّل كمستخدم نشط في المكتب. "
+    "يرجى التواصل مع إدارة المكتب."
+)
+
+
+def _digits(value: str | None) -> str:
+    return re.sub(r"\D", "", value or "")
+
+
+async def _resolve_active_user(conn, phone_digits: str) -> CurrentUser | None:
+    """Bind an inbound sender phone to an ACTIVE user, or None. [C-I][C-III]"""
+    if not phone_digits:
+        return None
+    row = await conn.fetchrow(
+        """
+        SELECT id, auth_user_id, full_name, email, phone,
+               role::text AS role, status::text AS status
+        FROM users
+        WHERE regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = $1
+        LIMIT 1
+        """,
+        phone_digits,
+    )
+    if row is None or row["status"] != "active":
+        return None
+    return CurrentUser(**dict(row))
+
+
+@router.post("/assistant/whatsapp/webhook")
+async def whatsapp_webhook(
+    body: dict,
+    x_webhook_token: Annotated[str | None, Header()] = None,
+) -> dict:
+    """Inbound WAHA webhook for the conversational assistant. [C-I][C-II][C-V]
+
+    Unregistered/inactive senders get a polite refusal and **zero** case content.
+    Registered senders get a grounded, scoped answer delivered back over WhatsApp.
+    Runs in a system (BYPASSRLS) context; scoping is enforced in code.
+    """
+    settings = get_settings()
+    if settings.waha_webhook_token and x_webhook_token != settings.waha_webhook_token:
+        raise ApiError(401, "unauthorized", "رمز التحقق غير صالح")
+
+    # WAHA "message" event shape: {event, session, payload:{from, body, fromMe}}
+    if body.get("event") not in (None, "message", "message.any"):
+        return {"status": "ignored"}
+    payload = body.get("payload") or {}
+    if payload.get("fromMe"):
+        return {"status": "ignored"}
+    sender = _digits(payload.get("from"))
+    text = (payload.get("body") or "").strip()
+    if not sender or not text:
+        return {"status": "ignored"}
+
+    async with db_connection(None, context="webhook:assistant:whatsapp") as conn:
+        user = await _resolve_active_user(conn, sender)
+        firm = await conn.fetchrow(
+            "SELECT llm_api_key, embedding_config, waha_url, waha_key FROM firm_settings LIMIT 1"
+        )
+
+        async def _reply(message: str) -> None:
+            if not firm or not firm["waha_url"]:
+                logger.warning("whatsapp_webhook: no WAHA url configured; cannot reply")
+                return
+            try:
+                await send_text(
+                    waha_url=firm["waha_url"],
+                    waha_key=firm["waha_key"],
+                    phone=sender,
+                    text=message,
+                    session=settings.waha_session,
+                )
+            except WahaError as exc:
+                logger.warning("whatsapp_webhook: reply failed: %s", exc)
+
+        # Unregistered/inactive → refuse with no case content. [C-I]
+        if user is None:
+            await _reply(_REFUSAL)
+            return {"status": "refused"}
+
+        api_key = (firm["llm_api_key"] if firm else "") or ""
+        emb_cfg = firm["embedding_config"] if firm else {}
+        if isinstance(emb_cfg, str):
+            emb_cfg = json.loads(emb_cfg)
+        model = (emb_cfg or {}).get("llm_model", "models/gemini-2.0-flash")
+
+        try:
+            chunks = await retrieve_scoped(
+                text, conn=conn, user=user, api_key=api_key,
+                embedding_config=emb_cfg or {}, top_k=8,
+            )
+        except EmbedError as exc:
+            logger.warning("whatsapp_webhook: embed failed: %s", exc)
+            await _reply("تعذّرت معالجة سؤالك حالياً، حاول لاحقاً.")
+            return {"status": "error"}
+
+        if not chunks:
+            await _reply(_NO_GROUNDING)
+            return {"status": "no_grounding"}
+
+        try:
+            answer = await answer_query(text, chunks, api_key=api_key, model=model)
+        except LlmError as exc:
+            logger.warning("whatsapp_webhook: llm failed: %s", exc)
+            await _reply("تعذّر توليد الإجابة حالياً، حاول لاحقاً.")
+            return {"status": "error"}
+
+        await _reply(answer)
+        return {"status": "answered", "user_id": str(user.id)}
 
 
 async def _save_as_draft(

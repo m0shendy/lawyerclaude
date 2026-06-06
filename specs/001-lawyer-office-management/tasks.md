@@ -172,12 +172,12 @@ until an expert lawyer blesses the calculation logic.
 **Independent test**: With the flag on, generate a suggestion; verify no notification until
 confirmed, confirmation records who/when, and with the flag off the feature is invisible.
 
-- [ ] T076 [US5] Gate the feature on `firm_settings.feature_appeal_deadlines` (default **false**) in `backend/app/core/flags.py` and UI **[C-X]**
-- [ ] T077 [US5] Implement appeal-deadline suggestion generation (`confirmed=false`, `basis`, `derived_from_document_id`, never treated as fact, no notification) in `backend/app/api/deadlines.py` **[C-X]**
-- [ ] T078 [US5] Implement confirm endpoint `/deadlines/{id}/confirm` (responsible lawyer → `confirmed=true` → only now schedule reminders) in `backend/app/api/deadlines.py` **[C-X]**
-- [ ] T079 [US5] Enforce no notification while unconfirmed + heightened warning on low-confidence source in `backend/app/scheduler/reminders.py` **[C-X][C-VII]**
-- [ ] T080 [P] [US5] Build the appeal-deadline UI as confirm-required suggestions (hidden unless flag on; "Verify & Confirm" action) in `frontend/app/deadlines/` **[C-X]**
-- [ ] T081 [US5] Add expert sign-off gate: document the blessing requirement, keep the flag off until obtained, and add the ToS note that deadline calculation is the lawyer's responsibility **[C-X][C-VIII]**
+- [X] T076 [US5] Gate the feature on `firm_settings.feature_appeal_deadlines` (default **false**) in `backend/app/core/flags.py` and UI **[C-X]**
+- [X] T077 [US5] Implement appeal-deadline suggestion generation (`confirmed=false`, `basis`, `derived_from_document_id`, never treated as fact, no notification) in `backend/app/api/deadlines.py` **[C-X]** — SCAFFOLD ONLY: `backend/app/scheduler/appeal_deadlines.py` periods are EMPTY pending expert sign-off (`docs/APPEAL_DEADLINES_SIGNOFF.md`); generator returns [] and flag stays off
+- [X] T078 [US5] Implement confirm endpoint `/deadlines/{id}/confirm` (responsible lawyer → `confirmed=true` → only now schedule reminders) in `backend/app/api/deadlines.py` **[C-X]**
+- [X] T079 [US5] Enforce no notification while unconfirmed + heightened warning on low-confidence source in `backend/app/scheduler/reminders.py` **[C-X][C-VII]**
+- [X] T080 [P] [US5] Build the appeal-deadline UI as confirm-required suggestions (hidden unless flag on; "Verify & Confirm" action) in `frontend/app/deadlines/` **[C-X]**
+- [X] T081 [US5] Add expert sign-off gate: document the blessing requirement, keep the flag off until obtained, and add the ToS note that deadline calculation is the lawyer's responsibility **[C-X][C-VIII]**
 
 ---
 
@@ -189,13 +189,13 @@ artifacts still pass the review gate. Agentic autonomy is allowed here.
 **Independent test**: From a registered user's number, ask a case question; verify grounded,
 scoped answer; unregistered/inactive sender refused; non-assigned case content withheld.
 
-- [ ] T082 [US6] Implement the WAHA inbound webhook handler in `backend/app/api/assistant.py`
-- [ ] T083 [US6] Implement sender phone → active user identity binding (refuse unknown/inactive) in `backend/app/api/assistant.py` **[C-I]**
+- [X] T082 [US6] Implement the WAHA inbound webhook handler in `backend/app/api/assistant.py`
+- [X] T083 [US6] Implement sender phone → active user identity binding (refuse unknown/inactive) in `backend/app/api/assistant.py` **[C-I]**
 - [X] T084 [US6] Implement retrieval scoped to caller role + `case_assignments` in `backend/app/retriever/scoped.py` **[C-I]**
 - [X] T085 [US6] Implement the agentic assistant flow (grounded answer with source links; persuasive-only framing; assistive posture) in `backend/app/llm/assistant.py` **[C-V][C-VIII][C-IX]**
 - [X] T086 [US6] Route any official-use artifact into `draft_unreviewed` (review gate still applies) in `backend/app/api/assistant.py` **[C-II]** (via `POST /assistant/query` `save_as_draft`)
 - [X] T087 [P] [US6] Build the in-app conversational assistant screen in `frontend/app/assistant/`
-- [ ] T088 [US6] Run the identity-scope test (unregistered refused; cross-case content blocked) and record results
+- [X] T088 [US6] Run the identity-scope test (unregistered refused; cross-case content blocked) and record results
 
 ---
 
@@ -206,10 +206,10 @@ playbook — producing grounded, AI-marked outputs behind the review gate. Agent
 **Independent test**: Analyze a contract; verify taxonomy clause IDs, missing/unusual flags with
 source links, and that findings are `draft_unreviewed` until approved.
 
-- [ ] T089 [US7] Implement clause taxonomy + contract analysis service in `backend/app/llm/contract_analysis.py`
-- [ ] T090 [US7] Implement missing/unusual clause flags + playbook comparison in `backend/app/llm/contract_analysis.py`
-- [ ] T091 [US7] Implement endpoint `/documents/{id}/analyze-contract` → `clause_flag`/`analysis` outputs (grounded, gated) in `backend/app/api/ai_outputs.py` **[C-II][C-V]**
-- [ ] T092 [P] [US7] Extend the AI review UI to render contract-analysis findings (gated) in `frontend/app/ai-review/`
+- [X] T089 [US7] Implement clause taxonomy + contract analysis service in `backend/app/llm/contract_analysis.py`
+- [X] T090 [US7] Implement missing/unusual clause flags + playbook comparison in `backend/app/llm/contract_analysis.py`
+- [X] T091 [US7] Implement endpoint `/documents/{id}/analyze-contract` → `clause_flag`/`analysis` outputs (grounded, gated) in `backend/app/api/ai_outputs.py` **[C-II][C-V]**
+- [X] T092 [P] [US7] Extend the AI review UI to render contract-analysis findings (gated) in `frontend/app/ai-review/`
 
 ---
 
@@ -220,9 +220,9 @@ support (istishhad) — never binding precedent or outcome prediction.
 **Independent test**: Request references for a legal point; verify matches from both corpora with
 source links and persuasive-only labeling.
 
-- [ ] T093 [US8] Implement reference matching service across private + shared corpora in `backend/app/retriever/references.py` **[C-IX]**
-- [ ] T094 [US8] Apply persuasive-only (istishhad) framing + explicit not-binding / not-prediction labels in `backend/app/retriever/references.py` **[C-IX]**
-- [ ] T095 [P] [US8] Build the reference-results UI with the persuasive disclaimer in `frontend/app/` (references view) **[C-IX]**
+- [X] T093 [US8] Implement reference matching service across private + shared corpora in `backend/app/retriever/references.py` **[C-IX]**
+- [X] T094 [US8] Apply persuasive-only (istishhad) framing + explicit not-binding / not-prediction labels in `backend/app/retriever/references.py` **[C-IX]**
+- [X] T095 [P] [US8] Build the reference-results UI with the persuasive disclaimer in `frontend/app/` (references view) **[C-IX]**
 
 ---
 
@@ -233,20 +233,20 @@ document — never predicting outcomes — as gated, AI-marked outputs with assi
 **Independent test**: Run risk signals on a document with a known problematic clause; verify it is
 flagged with a source link, framed as an observation about existing content, gated.
 
-- [ ] T096 [US9] Implement risk-signal detection over existing document content (no prediction) in `backend/app/llm/risk_signals.py` **[C-VIII][C-IX]**
-- [ ] T097 [US9] Implement endpoint `/documents/{id}/risk-signals` → `risk_signal` outputs (grounded, gated, posture text) in `backend/app/api/ai_outputs.py` **[C-II][C-VIII]**
-- [ ] T098 [P] [US9] Build the risk-signals UI with assistive-tool / not-prediction posture in `frontend/app/`
+- [X] T096 [US9] Implement risk-signal detection over existing document content (no prediction) in `backend/app/llm/risk_signals.py` **[C-VIII][C-IX]**
+- [X] T097 [US9] Implement endpoint `/documents/{id}/risk-signals` → `risk_signal` outputs (grounded, gated, posture text) in `backend/app/api/ai_outputs.py` **[C-II][C-VIII]**
+- [X] T098 [P] [US9] Build the risk-signals UI with assistive-tool / not-prediction posture in `frontend/app/`
 
 ---
 
 ## Phase 13: Polish & Cross-Cutting Concerns
 
-- [ ] T099 [P] Finalize ToS + UI copy stating "assistive tool, not legal advice" across UI, AI responses, and ToS **[C-VIII]**
-- [ ] T100 [P] Write the home→VPS deployment runbook (lift-and-shift, FRESH prod secrets, DNS, wildcard SSL) in `infra/` **[C-XI]**
-- [ ] T101 Execute and document a per-firm backup **restore test** before any real onboarding in `infra/backup/` **[C-XI]**
-- [ ] T102 [P] Harden the per-firm provisioning script for repeatability (worthwhile after ~3–4 firms) in `infra/provision/`
-- [ ] T103 [P] Performance pass: confirm OCR/embedding stay async/background; check retrieval latency at scale
-- [ ] T104 [P] Update `CLAUDE.md` and `quickstart.md` with finalized thresholds, lead points, and embedding model/dimension
+- [X] T099 [P] Finalize ToS + UI copy stating "assistive tool, not legal advice" across UI, AI responses, and ToS **[C-VIII]**
+- [X] T100 [P] Write the home→VPS deployment runbook (lift-and-shift, FRESH prod secrets, DNS, wildcard SSL) in `infra/` **[C-XI]**
+- [ ] T101 Execute and document a per-firm backup **restore test** before any real onboarding in `infra/backup/` **[C-XI]** — EXECUTED on `lawyer`; result **FAIL** (Supabase logical restore not clean — event triggers). Findings + fixes + remediation options in `infra/backup/RESTORE_TEST.md`. Blocks onboarding until resolved.
+- [ ] T102 [P] Harden the per-firm provisioning script for repeatability (worthwhile after ~3–4 firms) in `infra/provision/` — hardening checklist documented in `docs/OPERATIONS_NOTES.md`; script changes pending (deferred to ~3–4 firms)
+- [X] T103 [P] Performance pass: confirm OCR/embedding stay async/background; check retrieval latency at scale
+- [X] T104 [P] Update `CLAUDE.md` and `quickstart.md` with finalized thresholds, lead points, and embedding model/dimension
 
 ---
 

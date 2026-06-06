@@ -9,7 +9,7 @@ import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { ALL_ROLES, RequireRole } from '@/lib/rbac'
-import { apiGet, ApiError } from '@/lib/api'
+import { apiGet, apiPost, ApiError } from '@/lib/api'
 import {
   DOCUMENT_STATUS_LABELS,
   type Document,
@@ -40,6 +40,65 @@ function MetaItem({ label, children }: { label: string; children: React.ReactNod
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className="mt-0.5 text-sm font-medium">{children}</dd>
     </div>
+  )
+}
+
+// AI generation triggers — each output is born draft_unreviewed and lands in the
+// review queue (/ai-review). [C-II] Enabled only once the document is processed.
+function AiActions({ documentId }: { documentId: string }) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [done, setDone] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  const actions: Array<{ key: string; label: string; path: string }> = [
+    { key: 'summarize', label: 'تلخيص واستخراج', path: `/documents/${documentId}/summarize` },
+    { key: 'analyze', label: 'تحليل العقد', path: `/documents/${documentId}/analyze-contract` },
+    { key: 'risk', label: 'إشارات المخاطر', path: `/documents/${documentId}/risk-signals` },
+  ]
+
+  async function run(key: string, path: string) {
+    setBusy(key)
+    setErr(null)
+    setDone(null)
+    try {
+      await apiPost(path, {})
+      setDone(key)
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : 'تعذّر تنفيذ الإجراء')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <section className="mb-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-1 font-semibold">إجراءات الذكاء الاصطناعي</h2>
+      <p className="mb-3 text-xs text-gray-500">
+        تُنشأ المخرجات كمسودة بانتظار المراجعة — راجعها واعتمدها في صفحة المراجعة.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {actions.map((a) => (
+          <button
+            key={a.key}
+            type="button"
+            onClick={() => void run(a.key, a.path)}
+            disabled={busy !== null}
+            className="rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+          >
+            {busy === a.key ? 'جارٍ…' : a.label}
+          </button>
+        ))}
+      </div>
+      {done && (
+        <p className="mt-3 text-sm text-green-700">
+          ✓ تم — راجع المخرجات في{' '}
+          <Link href="/ai-review" className="underline">
+            صفحة المراجعة
+          </Link>
+        </p>
+      )}
+      {err && <p className="mt-3 text-sm text-red-700">{err}</p>}
+    </section>
   )
 }
 
@@ -149,6 +208,11 @@ function DocumentDetailScreen() {
           </div>
         )}
       </section>
+
+      {/* إجراءات الذكاء الاصطناعي — متاحة بعد اكتمال المعالجة */}
+      {(doc.status === 'ready' || doc.status === 'low_confidence') && (
+        <AiActions documentId={doc.id} />
+      )}
 
       {/* المقاطع (مصادر الاستناد) */}
       <section className="rounded-xl border border-gray-200 bg-white shadow-sm">

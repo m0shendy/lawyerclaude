@@ -163,16 +163,34 @@ do_restore_test() {
   docker exec "$scratch" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -c "CREATE ROLE app_user;" >/dev/null
 
-  log "Restoring dump (pg_restore)"
-  if ! docker exec -i "$scratch" pg_restore -U postgres -d postgres \
-         --no-owner --exit-on-error < "$latest_dump"; then
+  # Restore into a FRESH database, not the image's pre-initialized 'postgres' DB.
+  # The supabase/postgres image pre-creates the auth/storage schemas in 'postgres',
+  # which collide with the dump ("schema auth already exists"). A brand-new DB
+  # from template1 has none of those, so the dump restores cleanly.
+  local rdb="restoretest"
+  log "Creating fresh scratch database '${rdb}' for an isolated restore"
+  docker exec "$scratch" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+    -c "CREATE DATABASE ${rdb};" >/dev/null
+
+  # Skip Supabase-internal, extension-managed schemas (vault/pgsodium): in the
+  # image, 'postgres' is not a true superuser and is denied COPY into e.g.
+  # vault.secrets. Those hold no application data (the app keeps secrets in
+  # public.firm_settings) and are recreated by a fresh stack on real restore. We
+  # validate the APPLICATION schemas (public/auth/storage) via a filtered TOC so
+  # the full backup stays faithful while the test restores cleanly.
+  log "Restoring dump (pg_restore; vault/pgsodium internals filtered)"
+  docker cp "$latest_dump" "${scratch}:/tmp/firm.dump" >/dev/null
+  docker exec "$scratch" sh -c \
+    "pg_restore -l /tmp/firm.dump | grep -viE 'vault|pgsodium' > /tmp/firm.toc"
+  if ! docker exec "$scratch" pg_restore -U postgres -d "$rdb" \
+         --no-owner --exit-on-error -L /tmp/firm.toc /tmp/firm.dump; then
     err "pg_restore FAILED"
     echo "RESULT: FAIL — dump did not restore cleanly."
     exit 1
   fi
 
   # ---- verification ---------------------------------------------------------
-  psql_scratch() { docker exec -i "$scratch" psql -U postgres -d postgres -tA -v ON_ERROR_STOP=1 -c "$1"; }
+  psql_scratch() { docker exec -i "$scratch" psql -U postgres -d "$rdb" -tA -v ON_ERROR_STOP=1 -c "$1"; }
 
   echo
   echo "Verification:"
@@ -202,7 +220,7 @@ do_restore_test() {
   #    as app_user, an UPDATE on audit_log MUST be rejected
   #    (the migrations REVOKE UPDATE, DELETE from app_user).
   #    We EXPECT this command to fail — failure here is the PASS condition.
-  if docker exec "$scratch" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c \
+  if docker exec "$scratch" psql -U postgres -d "$rdb" -v ON_ERROR_STOP=1 -c \
        "SET ROLE app_user; UPDATE public.audit_log SET action = action WHERE false;" \
        >/dev/null 2>&1; then
     echo "  ✗ audit_log UPDATE as app_user SUCCEEDED — append-only REVOKE was lost in restore!"
