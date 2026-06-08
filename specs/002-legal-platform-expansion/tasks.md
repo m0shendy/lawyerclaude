@@ -18,13 +18,13 @@
 
 Project-level initialization for the expansion. No user story label.
 
-- [ ] T001 Create expansion migration file `supabase/migrations/0017_expansion.sql` with header comment listing all tables to be created (clients, client_contacts, document_folders, document_versions, document_checkouts, document_sharing, document_templates, conflict_check_log, invoices, invoice_items, payments, service_catalog, invoice_sequences, hearings, appointments); file will be populated section-by-section in subsequent tasks
+- [X] T001 Create expansion migration file `supabase/migrations/0017_expansion.sql` with header comment listing all tables to be created (clients, client_contacts, document_folders, document_versions, document_checkouts, document_sharing, document_templates, conflict_check_log, invoices, invoice_items, payments, service_catalog, invoice_sequences, hearings, appointments); file will be populated section-by-section in subsequent tasks
 
 - [ ] T002 [P] Add `litellm` to `backend/requirements.txt`; pin to latest stable version
 
-- [ ] T003 [P] Create frontend directory structure: `frontend/app/clients/`, `frontend/app/documents/`, `frontend/app/billing/`, `frontend/app/hearings/`, `frontend/app/appointments/`, `frontend/app/calendar/`, `frontend/app/portal/`, `frontend/app/analytics/`; add a placeholder `page.tsx` in each so Next.js route group is registered
+- [X] T003 [P] Create frontend directory structure: `frontend/app/clients/`, `frontend/app/documents/`, `frontend/app/billing/`, `frontend/app/hearings/`, `frontend/app/appointments/`, `frontend/app/calendar/`, `frontend/app/portal/`, `frontend/app/analytics/`; add a placeholder `page.tsx` in each so Next.js route group is registered
 
-- [ ] T004 [P] Create empty backend router files: `backend/app/api/clients.py`, `backend/app/api/dms.py`, `backend/app/api/billing.py`, `backend/app/api/hearings.py`, `backend/app/api/appointments.py`, `backend/app/api/calendar.py`, `backend/app/api/portal.py`, `backend/app/api/analytics.py`, `backend/app/api/ai_doc.py`; register all routers in `backend/app/main.py`
+- [X] T004 [P] Create empty backend router files: `backend/app/api/clients.py`, `backend/app/api/dms.py`, `backend/app/api/billing.py`, `backend/app/api/hearings.py`, `backend/app/api/appointments.py`, `backend/app/api/calendar.py`, `backend/app/api/portal.py`, `backend/app/api/analytics.py`, `backend/app/api/ai_doc.py`; register all routers in `backend/app/main.py`
 
 - [ ] T005 [P] Create LiteLLM wrapper module `backend/app/llm/providers.py` with a skeleton `dispatch(prompt, firm_settings)` function that reads `firm_settings.llm_provider_config` and calls `litellm.completion()`; add error handling for invalid provider and missing API key
 
@@ -34,9 +34,9 @@ Project-level initialization for the expansion. No user story label.
 
 Shared infrastructure that multiple user-story phases depend on. Must complete before Phase 3.
 
-- [ ] T006 Add `firm_settings` extension to `supabase/migrations/0017_expansion.sql`: add columns `llm_provider_config JSONB DEFAULT '{"provider":"gemini","model":"models/gemini-2.0-flash","api_key":""}'::jsonb`, `feature_client_portal BOOLEAN DEFAULT true`, `checkout_timeout_hours INTEGER DEFAULT 24`
+- [X] T006 Add `firm_settings` extension to `supabase/migrations/0017_expansion.sql`: add columns `llm_provider_config JSONB DEFAULT '{"provider":"gemini","model":"models/gemini-2.0-flash","api_key":""}'::jsonb`, `feature_client_portal BOOLEAN DEFAULT true`, `checkout_timeout_hours INTEGER DEFAULT 24`
 
-- [ ] T007 [P] Add Postgres sequences and case_number to `supabase/migrations/0017_expansion.sql`: `CREATE SEQUENCE cases_number_seq START 1;` then `ALTER TABLE cases ADD COLUMN IF NOT EXISTS case_number TEXT UNIQUE GENERATED ALWAYS AS ('CASE-' || lpad(nextval('cases_number_seq')::text, 4, '0')) STORED`; also add columns `client_id UUID REFERENCES clients(id)`, `practice_area TEXT`, `court TEXT`, `jurisdiction TEXT`, `opposing_counsel TEXT`, `docket_number TEXT`, `tags TEXT[]`, `priority TEXT DEFAULT 'medium' CHECK (priority IN ('low','medium','high'))`, `stage TEXT DEFAULT 'intake' CHECK (stage IN ('intake','active','litigation','settlement','closed'))`
+- [X] T007 [P] Add Postgres sequences and case_number to `supabase/migrations/0017_expansion.sql`: `CREATE SEQUENCE cases_number_seq START 1;` then `ALTER TABLE cases ADD COLUMN IF NOT EXISTS case_number TEXT UNIQUE GENERATED ALWAYS AS ('CASE-' || lpad(nextval('cases_number_seq')::text, 4, '0')) STORED`; also add columns `client_id UUID REFERENCES clients(id)`, `practice_area TEXT`, `court TEXT`, `jurisdiction TEXT`, `opposing_counsel TEXT`, `docket_number TEXT`, `tags TEXT[]`, `priority TEXT DEFAULT 'medium' CHECK (priority IN ('low','medium','high'))`, `stage TEXT DEFAULT 'intake' CHECK (stage IN ('intake','active','litigation','settlement','closed'))`
 
 - [ ] T008 [P] Add `invoice_sequences` helper table and `next_invoice_counter()` function to `supabase/migrations/0017_expansion.sql`:
   ```sql
@@ -47,9 +47,9 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
     RETURNING last_counter; $$ LANGUAGE SQL;
   ```
 
-- [ ] T009 Extend audit trigger function in `supabase/migrations/0017_expansion.sql` to register triggers on all 14 new tables created in this expansion: after all `CREATE TABLE` statements, add `CREATE TRIGGER audit_<table> AFTER INSERT OR UPDATE OR DELETE ON <table> FOR EACH ROW EXECUTE FUNCTION audit_log_trigger()` for each of: clients, client_contacts, document_folders, document_versions, document_checkouts, document_sharing, document_templates, invoices, invoice_items, payments, service_catalog, hearings, appointments, conflict_check_log
+- [X] T009 Extend audit trigger function in `supabase/migrations/0017_expansion.sql` to register triggers on all 14 new tables created in this expansion: after all `CREATE TABLE` statements, add `CREATE TRIGGER audit_<table> AFTER INSERT OR UPDATE OR DELETE ON <table> FOR EACH ROW EXECUTE FUNCTION audit_log_trigger()` for each of: clients, client_contacts, document_folders, document_versions, document_checkouts, document_sharing, document_templates, invoices, invoice_items, payments, service_catalog, hearings, appointments, conflict_check_log
 
-- [ ] T010 [P] Extend `ai_outputs.type` enum in `supabase/migrations/0017_expansion.sql`: `ALTER TYPE ai_output_type ADD VALUE IF NOT EXISTS 'doc_draft'; ALTER TYPE ai_output_type ADD VALUE IF NOT EXISTS 'letter_pack'; ALTER TYPE ai_output_type ADD VALUE IF NOT EXISTS 'case_timeline';`; also add column `template_id UUID REFERENCES document_templates(id)` to `ai_outputs`
+- [X] T010 [P] Extend `ai_outputs.type` enum in `supabase/migrations/0017_expansion.sql`: `ALTER TYPE ai_output_type ADD VALUE IF NOT EXISTS 'doc_draft'; ALTER TYPE ai_output_type ADD VALUE IF NOT EXISTS 'letter_pack'; ALTER TYPE ai_output_type ADD VALUE IF NOT EXISTS 'case_timeline';`; also add column `template_id UUID REFERENCES document_templates(id)` to `ai_outputs`
 
 - [ ] T011 [P] Extend `users` table in `supabase/migrations/0017_expansion.sql`: add `client` to the role enum `ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'client';`; add column `client_id UUID REFERENCES clients(id) NULL` (only populated when role = 'client')
 
@@ -112,15 +112,15 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [ ] T016 [P] [US3] Add RLS policies for `clients`, `client_contacts`, `conflict_check_log` to `supabase/migrations/0017_expansion.sql`: non-client roles get full CRUD on own-instance rows; `client` role gets SELECT on own `clients` row only (WHERE id = current_setting('app.client_id')::uuid)
 
-- [ ] T017 [P] [US3] Implement `backend/app/models/clients.py` with Pydantic schemas: `ClientCreate`, `ClientUpdate`, `ClientResponse` (includes `client_number`), `ContactCreate`, `ContactResponse`, `ConflictCheckRequest` (`party_name: str`), `ConflictCheckResponse` (`result`, `conflicts: list`)
+- [X] T017 [P] [US3] Implement `backend/app/models/clients.py` with Pydantic schemas: `ClientCreate`, `ClientUpdate`, `ClientResponse` (includes `client_number`), `ContactCreate`, `ContactResponse`, `ConflictCheckRequest` (`party_name: str`), `ConflictCheckResponse` (`result`, `conflicts: list`)
 
-- [ ] T018 [US3] Implement `backend/app/api/clients.py`: `GET/POST /clients`, `GET/PATCH/DELETE /clients/{id}`, `GET/POST /clients/{id}/contacts`, `PATCH/DELETE /clients/{id}/contacts/{cid}`, `POST /clients/conflict-check` — conflict check queries tsvector index across clients, client_contacts, and cases.opposing_counsel for active matters; inserts into conflict_check_log; returns matches
+- [X] T018 [US3] Implement `backend/app/api/clients.py`: `GET/POST /clients`, `GET/PATCH/DELETE /clients/{id}`, `GET/POST /clients/{id}/contacts`, `PATCH/DELETE /clients/{id}/contacts/{cid}`, `POST /clients/conflict-check` — conflict check queries tsvector index across clients, client_contacts, and cases.opposing_counsel for active matters; inserts into conflict_check_log; returns matches
 
-- [ ] T019 [P] [US3] Extend `backend/app/api/cases.py` to accept and return the new matter fields (`client_id`, `practice_area`, `court`, `jurisdiction`, `opposing_counsel`, `docket_number`, `tags`, `priority`, `stage`, `case_number`); update Pydantic models in `backend/app/models/cases.py`
+- [X] T019 [P] [US3] Extend `backend/app/api/cases.py` to accept and return the new matter fields (`client_id`, `practice_area`, `court`, `jurisdiction`, `opposing_counsel`, `docket_number`, `tags`, `priority`, `stage`, `case_number`); update Pydantic models in `backend/app/models/cases.py`
 
-- [ ] T020 [P] [US3] Create `frontend/app/clients/page.tsx` — client list with search, type/status filters, and "New Client" button leading to create form
+- [X] T020 [P] [US3] Create `frontend/app/clients/page.tsx` — client list with search, type/status filters, and "New Client" button leading to create form
 
-- [ ] T021 [P] [US3] Create `frontend/app/clients/[id]/page.tsx` — client detail showing profile, typed contacts list, linked matters, and linked invoices (stubs for billing phase)
+- [X] T021 [P] [US3] Create `frontend/app/clients/[id]/page.tsx` — client detail showing profile, typed contacts list, linked matters, and linked invoices (stubs for billing phase)
 
 - [X] T022 [US3] Create `frontend/components/ConflictCheckPanel.tsx` — inline conflict check widget that fires `POST /clients/conflict-check` on opposing-party name entry and displays any matches with conflict notes; reused in client create/edit form
 
@@ -131,7 +131,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 **Story goal**: Organize documents in folders with full version history, exclusive check-in/out, access controls, confidentiality flags, template library, and client sharing.
 **Independent test**: Check out a document (second user gets 409), check in a new version (prior version preserved), mark a document confidential (portal access denied), share a non-confidential document with a client (visible in portal).
 
-- [ ] T023 [US4] Add DMS DDL to `supabase/migrations/0017_expansion.sql`:
+- [X] T023 [US4] Add DMS DDL to `supabase/migrations/0017_expansion.sql`:
   ```sql
   CREATE TABLE document_folders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -180,7 +180,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
   );
   ```
 
-- [ ] T024 [US4] Add DB constraint preventing sharing of confidential documents to `supabase/migrations/0017_expansion.sql`:
+- [X] T024 [US4] Add DB constraint preventing sharing of confidential documents to `supabase/migrations/0017_expansion.sql`:
   ```sql
   CREATE OR REPLACE FUNCTION check_no_confidential_sharing() RETURNS TRIGGER AS $$
   BEGIN
@@ -191,21 +191,21 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
     FOR EACH ROW EXECUTE FUNCTION check_no_confidential_sharing();
   ```
 
-- [ ] T025 [P] [US4] Add RLS policies for DMS tables to `supabase/migrations/0017_expansion.sql`: non-client roles CRUD on own-instance rows; `client` role — `document_versions`: SELECT only on non-confidential documents with a `document_sharing` entry for their client_id; `document_sharing`, `document_checkouts`, `document_templates`, `document_folders`: denied for `client` role
+- [X] T025 [P] [US4] Add RLS policies for DMS tables to `supabase/migrations/0017_expansion.sql`: non-client roles CRUD on own-instance rows; `client` role — `document_versions`: SELECT only on non-confidential documents with a `document_sharing` entry for their client_id; `document_sharing`, `document_checkouts`, `document_templates`, `document_folders`: denied for `client` role
 
-- [ ] T026 [P] [US4] Implement `backend/app/models/dms.py` with Pydantic schemas: `FolderCreate`, `FolderResponse`, `VersionResponse`, `CheckoutResponse`, `SharingCreate`, `TemplateCreate`, `TemplateUpdate`, `TemplateResponse`, `GenerateFromTemplateRequest` (`matter_id`, `template_id`, optional `context`)
+- [X] T026 [P] [US4] Implement `backend/app/models/dms.py` with Pydantic schemas: `FolderCreate`, `FolderResponse`, `VersionResponse`, `CheckoutResponse`, `SharingCreate`, `TemplateCreate`, `TemplateUpdate`, `TemplateResponse`, `GenerateFromTemplateRequest` (`matter_id`, `template_id`, optional `context`)
 
-- [ ] T027 [US4] Implement folder and version endpoints in `backend/app/api/dms.py`:
+- [X] T027 [US4] Implement folder and version endpoints in `backend/app/api/dms.py`:
   - `GET /folders?matter_id=` — folder tree
   - `POST /folders`, `PATCH /folders/{id}`, `DELETE /folders/{id}`
   - `GET /documents/{id}/versions`, `GET /documents/{id}/versions/{vid}`
 
-- [ ] T028 [US4] Implement check-out/check-in endpoints in `backend/app/api/dms.py`:
+- [X] T028 [US4] Implement check-out/check-in endpoints in `backend/app/api/dms.py`:
   - `POST /documents/{id}/checkout` — INSERT into document_checkouts; return 409 if unique constraint violation (already checked out)
   - `DELETE /documents/{id}/checkout` — DELETE checkout without new version
   - `POST /documents/{id}/checkin` — multipart upload: store file in Supabase Storage at `docs/{doc_id}/v{N}/{filename}`; INSERT document_versions with version_number = max(current)+1, prev_version_id = current version; DELETE checkout row; audit-log both check-in and checkout-release events **[C-III]**
 
-- [ ] T029 [P] [US4] Implement document sharing and access endpoints in `backend/app/api/dms.py`:
+- [X] T029 [P] [US4] Implement document sharing and access endpoints in `backend/app/api/dms.py`:
   - `PATCH /documents/{id}/access` — update access_level and is_confidential on latest document_versions row
   - `POST /documents/{id}/share` / `DELETE /documents/{id}/share/{client_id}` — insert/delete document_sharing; API rejects sharing if is_confidential = true
 
@@ -230,7 +230,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 **Story goal**: Lawyers generate invoices with auto-numbers, line items, Egyptian payment methods, and full lifecycle tracking. Clients view their invoices in the portal.
 **Independent test**: Create INV-202606-000001, add line items with 14% tax, issue invoice (→ pending), record partial bank transfer payment (→ partial), record remainder (→ paid); all state transitions are audit-logged.
 
-- [ ] T036 [US5] Add billing DDL to `supabase/migrations/0017_expansion.sql`:
+- [X] T036 [US5] Add billing DDL to `supabase/migrations/0017_expansion.sql`:
   ```sql
   CREATE TABLE service_catalog (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -277,7 +277,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
   );
   ```
 
-- [ ] T037 [US5] Add invoice status update trigger to `supabase/migrations/0017_expansion.sql`:
+- [X] T037 [US5] Add invoice status update trigger to `supabase/migrations/0017_expansion.sql`:
   ```sql
   CREATE OR REPLACE FUNCTION update_invoice_status() RETURNS TRIGGER AS $$
   DECLARE paid_sum NUMERIC;
@@ -294,17 +294,17 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [ ] T038 [P] [US5] Add RLS policies for billing tables to `supabase/migrations/0017_expansion.sql`: `partner_manager`, `lawyer` CRUD; `paralegal`, `secretary` SELECT only on invoices/items/payments; `client` role SELECT on invoices and payments WHERE client_id = auth.client_id (portal use)
 
-- [ ] T039 [P] [US5] Implement `backend/app/models/billing.py`: `InvoiceCreate`, `InvoiceUpdate`, `InvoiceResponse` (includes `invoice_number`, computed totals), `InvoiceItemCreate`, `PaymentCreate`, `PaymentResponse`, `ServiceCatalogItem`
+- [X] T039 [P] [US5] Implement `backend/app/models/billing.py`: `InvoiceCreate`, `InvoiceUpdate`, `InvoiceResponse` (includes `invoice_number`, computed totals), `InvoiceItemCreate`, `PaymentCreate`, `PaymentResponse`, `ServiceCatalogItem`
 
-- [ ] T040 [US5] Implement `backend/app/api/billing.py` invoice endpoints: `GET/POST /invoices`, `GET/PATCH /invoices/{id}`, `POST /invoices/{id}/issue` (draft→pending), `POST /invoices/{id}/cancel`; validate that edit is only allowed on `draft` invoices (return 422 otherwise); audit-log all transitions **[C-III]**
+- [X] T040 [US5] Implement `backend/app/api/billing.py` invoice endpoints: `GET/POST /invoices`, `GET/PATCH /invoices/{id}`, `POST /invoices/{id}/issue` (draft→pending), `POST /invoices/{id}/cancel`; validate that edit is only allowed on `draft` invoices (return 422 otherwise); audit-log all transitions **[C-III]**
 
-- [ ] T041 [P] [US5] Implement invoice items + service catalog endpoints in `backend/app/api/billing.py`: `GET/POST /invoices/{id}/items`, `PATCH/DELETE /invoices/{id}/items/{iid}`; `GET/POST/PATCH/DELETE /service-catalog`; after item changes, recalculate invoice subtotal
+- [X] T041 [P] [US5] Implement invoice items + service catalog endpoints in `backend/app/api/billing.py`: `GET/POST /invoices/{id}/items`, `PATCH/DELETE /invoices/{id}/items/{iid}`; `GET/POST/PATCH/DELETE /service-catalog`; after item changes, recalculate invoice subtotal
 
-- [ ] T042 [P] [US5] Implement payment recording in `backend/app/api/billing.py`: `POST /invoices/{id}/payments` — validate amount > 0 and invoice status not `paid`/`cancelled`; INSERT payment; the DB trigger updates invoice status automatically; audit-log action=`payment_recorded` **[C-III]**
+- [X] T042 [P] [US5] Implement payment recording in `backend/app/api/billing.py`: `POST /invoices/{id}/payments` — validate amount > 0 and invoice status not `paid`/`cancelled`; INSERT payment; the DB trigger updates invoice status automatically; audit-log action=`payment_recorded` **[C-III]**
 
-- [ ] T043 [P] [US5] Create `frontend/app/billing/page.tsx` — invoice list with status badges, client/matter filters, totals summary bar; "New Invoice" button (partner_manager and lawyer only)
+- [X] T043 [P] [US5] Create `frontend/app/billing/page.tsx` — invoice list with status badges, client/matter filters, totals summary bar; "New Invoice" button (partner_manager and lawyer only)
 
-- [ ] T044 [US5] Create `frontend/app/billing/[id]/page.tsx` — invoice detail: header info, line items table with calculated totals, payment history, status timeline; `frontend/app/billing/new/page.tsx` — invoice create/edit form with service-catalog lookup for line items, tax/discount inputs, auto-display of calculated total
+- [X] T044 [US5] Create `frontend/app/billing/[id]/page.tsx` — invoice detail: header info, line items table with calculated totals, payment history, status timeline; `frontend/app/billing/new/page.tsx` — invoice create/edit form with service-catalog lookup for line items, tax/discount inputs, auto-display of calculated total
 
 ---
 
@@ -313,7 +313,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 **Story goal**: Record court hearings (Egyptian civil types) and client appointments; detect booking conflicts; view all scheduled events in a unified month/week calendar; hearing reminders fire via deterministic scheduler.
 **Independent test**: Create hearing 3 days out with reminder=3; scheduler fires notification and logs it; attempt to double-book same lawyer (409); both events appear in calendar view with correct type filter.
 
-- [ ] T045 [US6] [US7] [US8] Add hearings and appointments DDL to `supabase/migrations/0017_expansion.sql`:
+- [X] T045 [US6] [US7] [US8] Add hearings and appointments DDL to `supabase/migrations/0017_expansion.sql`:
   ```sql
   CREATE TABLE hearings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -349,7 +349,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
   );
   ```
 
-- [ ] T046 [US8] Add `calendar_events` view to `supabase/migrations/0017_expansion.sql`:
+- [X] T046 [US8] Add `calendar_events` view to `supabase/migrations/0017_expansion.sql`:
   ```sql
   CREATE VIEW calendar_events AS
     SELECT id, 'hearing' AS event_type, type AS title, scheduled_at,
@@ -361,23 +361,23 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
            matter_id, assigned_lawyer_id, status FROM appointments;
   ```
 
-- [ ] T047 [P] [US6] [US7] Add RLS for hearings and appointments to `supabase/migrations/0017_expansion.sql`: non-client roles CRUD; `client` role: SELECT on appointments WHERE client_id = auth.client_id only (no access to hearings)
+- [X] T047 [P] [US6] [US7] Add RLS for hearings and appointments to `supabase/migrations/0017_expansion.sql`: non-client roles CRUD; `client` role: SELECT on appointments WHERE client_id = auth.client_id only (no access to hearings)
 
-- [ ] T048 [P] [US6] [US7] [US8] Implement `backend/app/models/hearings.py`: `HearingCreate`, `HearingUpdate`, `HearingResponse`, `AppointmentCreate`, `AppointmentUpdate`, `AppointmentResponse`, `CalendarEventResponse`
+- [X] T048 [P] [US6] [US7] [US8] Implement `backend/app/models/hearings.py`: `HearingCreate`, `HearingUpdate`, `HearingResponse`, `AppointmentCreate`, `AppointmentUpdate`, `AppointmentResponse`, `CalendarEventResponse`
 
-- [ ] T049 [US6] Implement `backend/app/api/hearings.py`: `GET/POST /hearings`, `GET/PATCH/DELETE /hearings/{id}`, `POST /hearings/{id}/confirm` (sets status=confirmed, audit-logged); include `?matter_id=`, `?status=`, `?from=`, `?to=` query params
+- [X] T049 [US6] Implement `backend/app/api/hearings.py`: `GET/POST /hearings`, `GET/PATCH/DELETE /hearings/{id}`, `POST /hearings/{id}/confirm` (sets status=confirmed, audit-logged); include `?matter_id=`, `?status=`, `?from=`, `?to=` query params
 
-- [ ] T050 [US7] Implement `backend/app/api/appointments.py`: `GET/POST /appointments`, `GET/PATCH/DELETE /appointments/{id}`; on POST/PATCH, run conflict detection: `SELECT 1 FROM appointments WHERE assigned_lawyer_id=? AND status NOT IN ('cancelled','completed') AND tstzrange(scheduled_at, scheduled_at + duration_minutes*'1 minute'::interval) && tstzrange($new_start, $new_end)` — return 409 with `error: appointment_time_conflict` if match found
+- [X] T050 [US7] Implement `backend/app/api/appointments.py`: `GET/POST /appointments`, `GET/PATCH/DELETE /appointments/{id}`; on POST/PATCH, run conflict detection: `SELECT 1 FROM appointments WHERE assigned_lawyer_id=? AND status NOT IN ('cancelled','completed') AND tstzrange(scheduled_at, scheduled_at + duration_minutes*'1 minute'::interval) && tstzrange($new_start, $new_end)` — return 409 with `error: appointment_time_conflict` if match found
 
-- [ ] T051 [P] [US8] Implement `backend/app/api/calendar.py`: `GET /calendar` — query `calendar_events` view with `?from=`, `?to=`, `?type=all|hearing|appointment`, `?lawyer_id=`; return unified list sorted by `scheduled_at`
+- [X] T051 [P] [US8] Implement `backend/app/api/calendar.py`: `GET /calendar` — query `calendar_events` view with `?from=`, `?to=`, `?type=all|hearing|appointment`, `?lawyer_id=`; return unified list sorted by `scheduled_at`
 
 - [ ] T052 [US6] Extend spec 001 deterministic scheduler in `backend/app/scheduler/` with hearing reminder job: each morning (Africa/Cairo 08:00) query `hearings WHERE status IN ('scheduled','confirmed') AND scheduled_at::date = CURRENT_DATE + reminder_days`; send WAHA notification to assigned_lawyer; if `scheduled_at::date = CURRENT_DATE + 1 AND status = 'scheduled'` (not yet confirmed), also notify a `partner_manager`; INSERT `notifications_log` entry; log failures, never silently drop **[C-IV]**
 
-- [ ] T053 [P] [US6] Create `frontend/app/hearings/page.tsx` — hearing list with matter/status/date filters; `frontend/app/hearings/[id]/page.tsx` — hearing detail with court info; `frontend/app/hearings/new/page.tsx` — create/edit form with Egyptian hearing type dropdown (مرافعة, تسوية ودية, تحقيق, إصدار حكم, تأجيل, وساطة, تحكيم, other)
+- [X] T053 [P] [US6] Create `frontend/app/hearings/page.tsx` — hearing list with matter/status/date filters; `frontend/app/hearings/[id]/page.tsx` — hearing detail with court info; `frontend/app/hearings/new/page.tsx` — create/edit form with Egyptian hearing type dropdown (مرافعة, تسوية ودية, تحقيق, إصدار حكم, تأجيل, وساطة, تحكيم, other)
 
 - [ ] T054 [P] [US7] Create `frontend/app/appointments/page.tsx` — appointment list with lawyer/type/status/date filters; `frontend/app/appointments/[id]/page.tsx` — appointment detail; `frontend/app/appointments/new/page.tsx` — create/edit form; inline conflict warning component (shows 409 error inline, requires user to choose a different time before saving)
 
-- [ ] T055 [US8] Create `frontend/app/calendar/page.tsx` — unified calendar: month/week toggle, date navigation (prev/next), event-type filter chips (All / Hearings / Appointments); each event rendered as a colored chip with type label; click → quick-detail popover with matter link and status; popover has "Edit" link to full record
+- [X] T055 [US8] Create `frontend/app/calendar/page.tsx` — unified calendar: month/week toggle, date navigation (prev/next), event-type filter chips (All / Hearings / Appointments); each event rendered as a colored chip with type label; click → quick-detail popover with matter link and status; popover has "Edit" link to full record
 
 ---
 
@@ -425,7 +425,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [ ] T071 [P] [US9] Add portal-specific RLS policies to `supabase/migrations/0017_expansion.sql` for cases, document_versions, document_sharing, invoices, payments, appointments: each `client` role policy uses `client_id = (SELECT id FROM clients WHERE portal_user_id = auth.uid())` as the row filter; ensure `draft_unreviewed` ai_outputs are excluded from portal policy on ai_outputs
 
-- [ ] T072 [P] [US9] Implement `backend/app/api/portal.py` with all portal endpoints (all require `role=client` claim):
+- [X] T072 [P] [US9] Implement `backend/app/api/portal.py` with all portal endpoints (all require `role=client` claim):
   - `GET /portal/matters`, `GET /portal/matters/{id}`
   - `GET /portal/documents`, `GET /portal/documents/{id}/download` (pre-signed Storage URL)
   - `GET /portal/invoices`, `GET /portal/invoices/{id}`
@@ -466,15 +466,15 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [ ] T080 [US10] Add materialized-view refresh trigger to `supabase/migrations/0017_expansion.sql`: create a `refresh_dashboard_kpis()` function that calls `REFRESH MATERIALIZED VIEW CONCURRENTLY dashboard_kpis`; create AFTER INSERT/UPDATE triggers on `cases`, `hearings`, `deadlines`, `invoices`, `ai_outputs` that call this function; note: `CONCURRENTLY` requires a unique index on the view — add `CREATE UNIQUE INDEX ON dashboard_kpis ((1))`
 
-- [ ] T081 [P] [US10] Implement `backend/app/models/analytics.py`: `DashboardKPIs`, `FinancialReportRow`, `WorkloadRow`, `ActivityFeedItem`
+- [X] T081 [P] [US10] Implement `backend/app/models/analytics.py`: `DashboardKPIs`, `FinancialReportRow`, `WorkloadRow`, `ActivityFeedItem`
 
-- [ ] T082 [US10] Implement `backend/app/api/analytics.py` with partner_manager-only guard (return 403 for other roles):
+- [X] T082 [US10] Implement `backend/app/api/analytics.py` with partner_manager-only guard (return 403 for other roles):
   - `GET /analytics/dashboard` — reads `dashboard_kpis` materialized view
   - `GET /analytics/financial?from=&to=` — aggregate invoices + payments: revenue by period, outstanding total, payment method breakdown
   - `GET /analytics/operational` — aggregate cases by lawyer (case_assignments), calculate mean resolution time for closed cases
   - `GET /analytics/activity-feed?limit=&offset=` — SELECT from audit_log ORDER BY created_at DESC; all assembly is deterministic code, never LLM **[C-IV]**
 
-- [ ] T083 [P] [US10] Create `frontend/app/analytics/page.tsx` — analytics dashboard (partner_manager only, route guard): four KPI cards (open matters, upcoming hearings+deadlines, pending invoices, pending AI review); data from `GET /analytics/dashboard`
+- [X] T083 [P] [US10] Create `frontend/app/analytics/page.tsx` — analytics dashboard (partner_manager only, route guard): four KPI cards (open matters, upcoming hearings+deadlines, pending invoices, pending AI review); data from `GET /analytics/dashboard`
 
 - [ ] T084 [P] [US10] Create `frontend/app/analytics/financial/page.tsx` — financial report: date range picker, revenue by period bar chart, outstanding invoices table, payment method doughnut chart
 
@@ -489,9 +489,9 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 **Story goal**: Tasks get priority levels and advanced filtering.
 **Independent test**: Create tasks with Low/Medium/High priority; filter by priority, status, assignee, matter, due date — correct subset returned.
 
-- [ ] T087 Add `priority TEXT DEFAULT 'medium' CHECK (priority IN ('low','medium','high'))` column to `tasks` table in `supabase/migrations/0017_expansion.sql`; add index on `(priority, status)` for filtering
+- [X] T087 Add `priority TEXT DEFAULT 'medium' CHECK (priority IN ('low','medium','high'))` column to `tasks` table in `supabase/migrations/0017_expansion.sql`; add index on `(priority, status)` for filtering
 
-- [ ] T088 [P] Update `backend/app/api/cases.py` (or tasks router) to accept `priority` on create/update and support `?priority=`, `?status=`, `?assignee_id=`, `?matter_id=`, `?due_before=`, `?due_after=` filter params on `GET /tasks`
+- [X] T088 [P] Update `backend/app/api/cases.py` (or tasks router) to accept `priority` on create/update and support `?priority=`, `?status=`, `?assignee_id=`, `?matter_id=`, `?due_before=`, `?due_after=` filter params on `GET /tasks`
 
 - [X] T089 [P] Update `frontend/app/tasks/page.tsx` — add priority badge (color-coded: red=high, amber=medium, grey=low), priority filter chip group, and combine with existing status/assignee/matter/date filters
 
