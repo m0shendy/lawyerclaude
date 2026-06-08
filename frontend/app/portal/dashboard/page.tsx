@@ -85,7 +85,19 @@ export default function PortalDashboardPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6 space-y-6">
+      {/* Bottom nav */}
+      <nav className="fixed bottom-0 inset-x-0 border-t border-gray-200 bg-white px-4 py-2 z-10">
+        <div className="mx-auto flex max-w-3xl justify-around">
+          <Link href="/portal/dashboard" className="flex flex-col items-center gap-0.5 text-xs text-blue-700 font-medium">
+            <span>🏠</span>الرئيسية
+          </Link>
+          <Link href="/portal/documents" className="flex flex-col items-center gap-0.5 text-xs text-gray-500 hover:text-blue-700">
+            <span>📁</span>المستندات
+          </Link>
+        </div>
+      </nav>
+
+      <main className="mx-auto max-w-3xl px-4 py-6 pb-20 space-y-6">
         {error && <div className="rounded bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
 
         {loading ? (

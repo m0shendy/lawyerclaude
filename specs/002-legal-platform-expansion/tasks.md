@@ -439,7 +439,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [ ] T075 [P] [US9] Create `frontend/app/portal/matters/page.tsx` and `frontend/app/portal/matters/[id]/page.tsx` — read-only matter views; no internal notes, opposing counsel, or audit log fields exposed
 
-- [ ] T076 [P] [US9] Create `frontend/app/portal/documents/page.tsx` — folder tree of shared non-confidential documents with download button; `frontend/app/portal/invoices/page.tsx` and `[id]/page.tsx` — invoice list and detail (status, items, payments); `frontend/app/portal/appointments/page.tsx` — upcoming consultations list
+- [X] T076 [P] [US9] Create `frontend/app/portal/documents/page.tsx` — folder tree of shared non-confidential documents with download button; `frontend/app/portal/invoices/page.tsx` and `[id]/page.tsx` — invoice list and detail (status, items, payments); `frontend/app/portal/appointments/page.tsx` — upcoming consultations list
 
 - [ ] T077 [P] [US9] Create `frontend/app/portal/insights/page.tsx` — approved AI insights list; each item rendered with `<AiMarkedOutput/>` showing the AI-marked banner and assistive-tool disclaimer even post-approval **[C-VI][C-VIII]**
 
@@ -478,9 +478,9 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [ ] T084 [P] [US10] Create `frontend/app/analytics/financial/page.tsx` — financial report: date range picker, revenue by period bar chart, outstanding invoices table, payment method doughnut chart
 
-- [ ] T085 [P] [US10] Create `frontend/app/analytics/operational/page.tsx` — operational report: workload table (lawyer name, active matters count), resolution time distribution bar chart
+- [X] T085 [P] [US10] Create `frontend/app/analytics/operational/page.tsx` — operational report: workload table (lawyer name, active matters count), resolution time distribution bar chart
 
-- [ ] T086 [US10] Create `frontend/app/analytics/activity/page.tsx` — activity feed: paginated list of audit_log entries with entity type, action, actor name, timestamp; sourced directly from audit_log — confirms report is grounded in audited facts **[C-III][C-IV]**
+- [X] T086 [US10] Create `frontend/app/analytics/activity/page.tsx` — activity feed: paginated list of audit_log entries with entity type, action, actor name, timestamp; sourced directly from audit_log — confirms report is grounded in audited facts **[C-III][C-IV]**
 
 ---
 

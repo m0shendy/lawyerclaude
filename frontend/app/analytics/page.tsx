@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { ApiError, apiGet } from '@/lib/api'
 import { RequireRole } from '@/lib/rbac'
@@ -38,7 +39,23 @@ export default function AnalyticsPage() {
   return (
     <RequireRole roles={['partner_manager']}>
       <AppShell>
-        <h1 className="text-xl font-bold mb-6">التقارير المالية</h1>
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-xl font-bold">التقارير</h1>
+          <div className="flex gap-2">
+            <Link
+              href="/analytics/operational"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              📊 التقرير التشغيلي
+            </Link>
+            <Link
+              href="/analytics/activity"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              📋 سجل النشاطات
+            </Link>
+          </div>
+        </div>
 
         {error && <div className="mb-4 rounded bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
 
