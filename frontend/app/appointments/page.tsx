@@ -5,6 +5,7 @@
 // user must pick a different time before saving.
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { ApiError, apiGet, apiPatch, apiPost } from '@/lib/api'
 import { ALL_ROLES, RequireRole } from '@/lib/rbac'
@@ -339,24 +340,29 @@ function AppointmentsScreen() {
                     </span>
                   </td>
                   <td className="px-4 py-2">
-                    {a.status === 'scheduled' && (
-                      <button
-                        type="button"
-                        onClick={() => void setStatus(a.id, 'confirmed')}
-                        className="text-xs text-blue-700 hover:underline"
-                      >
-                        تأكيد
-                      </button>
-                    )}
-                    {(a.status === 'scheduled' || a.status === 'confirmed') && (
-                      <button
-                        type="button"
-                        onClick={() => void setStatus(a.id, 'cancelled')}
-                        className="mr-3 text-xs text-red-700 hover:underline"
-                      >
-                        إلغاء
-                      </button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      <Link href={`/appointments/${a.id}`} className="text-xs text-blue-700 hover:underline">
+                        تفاصيل
+                      </Link>
+                      {a.status === 'scheduled' && (
+                        <button
+                          type="button"
+                          onClick={() => void setStatus(a.id, 'confirmed')}
+                          className="text-xs text-green-700 hover:underline"
+                        >
+                          تأكيد
+                        </button>
+                      )}
+                      {(a.status === 'scheduled' || a.status === 'confirmed') && (
+                        <button
+                          type="button"
+                          onClick={() => void setStatus(a.id, 'cancelled')}
+                          className="text-xs text-red-700 hover:underline"
+                        >
+                          إلغاء
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
