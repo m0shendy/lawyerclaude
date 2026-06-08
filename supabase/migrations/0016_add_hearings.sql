@@ -33,7 +33,7 @@ create index idx_hearings_case        on hearings (case_id);
 create index idx_hearings_date        on hearings (hearing_date) where status = 'scheduled';
 create index idx_hearings_lawyer      on hearings (assigned_lawyer_id);
 create index idx_hearings_upcoming    on hearings (hearing_date)
-    where status = 'scheduled' and hearing_date > now();
+    where status = 'scheduled';
 
 -- ── RLS ──────────────────────────────────────────────────────────────────────
 

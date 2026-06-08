@@ -22,12 +22,10 @@ create table appointments (
     notes              text,
     created_by         uuid               references users(id),
     created_at         timestamptz        not null default now(),
-    updated_at         timestamptz        not null default now(),
-    -- DB-level double-booking guard for active appointments (FR-129).
-    constraint no_lawyer_double_booking exclude using gist (
-        assigned_lawyer_id with =,
-        tstzrange(scheduled_at, scheduled_at + duration_minutes * interval '1 minute') with &&
-    ) where (status not in ('cancelled', 'completed'))
+    updated_at         timestamptz        not null default now()
+    -- Note: double-booking guard runs at the API layer via tstzrange overlap
+    -- query (FR-129). A GiST exclusion constraint on timestamptz expressions
+    -- requires IMMUTABLE functions which PostgreSQL does not allow here.
 );
 
 create index idx_appointments_case    on appointments (case_id);
