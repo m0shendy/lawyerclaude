@@ -56,7 +56,15 @@ export default function HearingsPage() {
   return (
     <RequireRole roles={ALL_ROLES}>
       <AppShell>
-        <h1 className="text-xl font-bold mb-4">الجلسات</h1>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h1 className="text-xl font-bold">الجلسات</h1>
+          <Link
+            href="/hearings/new"
+            className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800"
+          >
+            + جدولة جلسة
+          </Link>
+        </div>
 
         <div className="mb-4 flex gap-0 border-b border-gray-200">
           <button onClick={() => setTab('upcoming')} className={tabCls(tab === 'upcoming')}>القادمة (30 يوم)</button>
@@ -114,7 +122,8 @@ export default function HearingsPage() {
                         <span className={`rounded-full px-2 py-0.5 text-xs ${HEARING_STATUS_COLORS[h.status]}`}>
                           {HEARING_STATUS_LABELS[h.status]}
                         </span>
-                        <Link href={`/cases/${h.case_id}`} className="text-xs text-blue-700 hover:underline">القضية</Link>
+                        <Link href={`/hearings/${h.id}`} className="text-xs text-blue-700 hover:underline">تفاصيل</Link>
+                        <Link href={`/cases/${h.case_id}`} className="text-xs text-gray-500 hover:underline">القضية</Link>
                       </div>
                     </div>
                   ))}
@@ -149,7 +158,10 @@ export default function HearingsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Link href={`/cases/${h.case_id}`} className="text-blue-700 hover:underline text-xs">القضية</Link>
+                      <div className="flex gap-3">
+                        <Link href={`/hearings/${h.id}`} className="text-blue-700 hover:underline text-xs">تفاصيل</Link>
+                        <Link href={`/cases/${h.case_id}`} className="text-gray-500 hover:underline text-xs">القضية</Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

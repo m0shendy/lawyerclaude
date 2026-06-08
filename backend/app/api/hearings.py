@@ -188,8 +188,8 @@ async def delete_hearing(hearing_id: UUID, user: CurrentUserDep, conn: Db) -> di
 
 
 # ── GET /hearings/upcoming ────────────────────────────────────────────────────
-# Note: this route must be declared BEFORE the case-scoped routes to avoid
-# FastAPI treating "upcoming" as a path parameter.
+# Note: this route must be declared BEFORE /{hearing_id} to avoid FastAPI
+# treating the literal string "upcoming" as a UUID path parameter.
 
 @router.get("/hearings/upcoming", response_model=list[HearingWithCase])
 async def upcoming_hearings(
@@ -222,3 +222,14 @@ async def upcoming_hearings(
             d["next_hearing_date"] = d["next_hearing_date"].isoformat()
         result.append(HearingWithCase(**d))
     return result
+
+
+# ── GET /hearings/{id} ────────────────────────────────────────────────────────
+# Declared AFTER /hearings/upcoming so "upcoming" is matched by the literal
+# route, not captured as a UUID path parameter.
+
+@router.get("/hearings/{hearing_id}", response_model=HearingRead)
+async def get_hearing(hearing_id: UUID, user: CurrentUserDep, conn: Db) -> HearingRead:
+    existing = await _get_hearing_or_404(conn, hearing_id)
+    await assert_case_access(conn, user, existing.case_id)
+    return existing
