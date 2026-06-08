@@ -190,6 +190,7 @@ export interface FirmSettings {
   embedding_config: { model: string; dimension: number }
   reminder_lead_points: string[]
   feature_appeal_deadlines: boolean
+  feature_client_portal: boolean
   subscription_metadata: Record<string, unknown>
   created_at: string
   updated_at: string

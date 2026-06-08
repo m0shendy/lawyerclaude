@@ -20,13 +20,13 @@ Project-level initialization for the expansion. No user story label.
 
 - [X] T001 Create expansion migration file `supabase/migrations/0017_expansion.sql` with header comment listing all tables to be created (clients, client_contacts, document_folders, document_versions, document_checkouts, document_sharing, document_templates, conflict_check_log, invoices, invoice_items, payments, service_catalog, invoice_sequences, hearings, appointments); file will be populated section-by-section in subsequent tasks
 
-- [ ] T002 [P] Add `litellm` to `backend/requirements.txt`; pin to latest stable version
+- [X] T002 [P] Add `litellm` to `backend/requirements.txt`; pin to latest stable version
 
 - [X] T003 [P] Create frontend directory structure: `frontend/app/clients/`, `frontend/app/documents/`, `frontend/app/billing/`, `frontend/app/hearings/`, `frontend/app/appointments/`, `frontend/app/calendar/`, `frontend/app/portal/`, `frontend/app/analytics/`; add a placeholder `page.tsx` in each so Next.js route group is registered
 
 - [X] T004 [P] Create empty backend router files: `backend/app/api/clients.py`, `backend/app/api/dms.py`, `backend/app/api/billing.py`, `backend/app/api/hearings.py`, `backend/app/api/appointments.py`, `backend/app/api/calendar.py`, `backend/app/api/portal.py`, `backend/app/api/analytics.py`, `backend/app/api/ai_doc.py`; register all routers in `backend/app/main.py`
 
-- [ ] T005 [P] Create LiteLLM wrapper module `backend/app/llm/providers.py` with a skeleton `dispatch(prompt, firm_settings)` function that reads `firm_settings.llm_provider_config` and calls `litellm.completion()`; add error handling for invalid provider and missing API key
+- [X] T005 [P] Create LiteLLM wrapper module `backend/app/llm/providers.py` with a skeleton `dispatch(prompt, firm_settings)` function that reads `firm_settings.llm_provider_config` and calls `litellm.completion()`; add error handling for invalid provider and missing API key
 
 ---
 
@@ -371,7 +371,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [X] T051 [P] [US8] Implement `backend/app/api/calendar.py`: `GET /calendar` — query `calendar_events` view with `?from=`, `?to=`, `?type=all|hearing|appointment`, `?lawyer_id=`; return unified list sorted by `scheduled_at`
 
-- [ ] T052 [US6] Extend spec 001 deterministic scheduler in `backend/app/scheduler/` with hearing reminder job: each morning (Africa/Cairo 08:00) query `hearings WHERE status IN ('scheduled','confirmed') AND scheduled_at::date = CURRENT_DATE + reminder_days`; send WAHA notification to assigned_lawyer; if `scheduled_at::date = CURRENT_DATE + 1 AND status = 'scheduled'` (not yet confirmed), also notify a `partner_manager`; INSERT `notifications_log` entry; log failures, never silently drop **[C-IV]**
+- [X] T052 [US6] Extend spec 001 deterministic scheduler in `backend/app/scheduler/` with hearing reminder job: each morning (Africa/Cairo 08:00) query `hearings WHERE status IN ('scheduled','confirmed') AND scheduled_at::date = CURRENT_DATE + reminder_days`; send WAHA notification to assigned_lawyer; if `scheduled_at::date = CURRENT_DATE + 1 AND status = 'scheduled'` (not yet confirmed), also notify a `partner_manager`; INSERT `notifications_log` entry; log failures, never silently drop **[C-IV]**
 
 - [X] T053 [P] [US6] Create `frontend/app/hearings/page.tsx` — hearing list with matter/status/date filters; `frontend/app/hearings/[id]/page.tsx` — hearing detail with court info; `frontend/app/hearings/new/page.tsx` — create/edit form with Egyptian hearing type dropdown (مرافعة, تسوية ودية, تحقيق, إصدار حكم, تأجيل, وساطة, تحكيم, other)
 
@@ -507,7 +507,7 @@ Cross-cutting concerns, extended existing screens, smoke test.
 
 - [X] T092 [P] Extend `frontend/app/cases/page.tsx` (matter list) — add filter options: client, practice area, stage, priority
 
-- [ ] T093 [P] Update `frontend/app/settings/page.tsx` — add LLM provider config panel (link to `/app/settings/llm-provider`); add client portal toggle (reads/writes `firm_settings.feature_client_portal`)
+- [X] T093 [P] Update `frontend/app/settings/page.tsx` — add LLM provider config panel (link to `/app/settings/llm-provider`); add client portal toggle (reads/writes `firm_settings.feature_client_portal`)
 
 - [ ] T094 Apply `supabase/migrations/0017_expansion.sql` to the running instance and confirm all tables, views, sequences, triggers, and RLS policies were created without errors: `psql $DATABASE_URL < supabase/migrations/0017_expansion.sql` then run `\dt` and `\dv` and spot-check each table exists
 

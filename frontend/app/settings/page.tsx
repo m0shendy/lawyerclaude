@@ -31,6 +31,7 @@ function SettingsScreen() {
   const [embedModel, setEmbedModel] = useState('')
   const [embedDim, setEmbedDim] = useState(1536)
   const [leadPoints, setLeadPoints] = useState('')
+  const [portalEnabled, setPortalEnabled] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -46,6 +47,7 @@ function SettingsScreen() {
         setEmbedModel(s.embedding_config?.model ?? '')
         setEmbedDim(s.embedding_config?.dimension ?? 1536)
         setLeadPoints(s.reminder_lead_points?.join(', ') ?? '7d, 3d, 1d, 0d')
+        setPortalEnabled(s.feature_client_portal ?? false)
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'تعذّر تحميل الإعدادات'))
       .finally(() => setLoading(false))
@@ -68,6 +70,7 @@ function SettingsScreen() {
         llm_provider_config: { provider: llmProvider, model: llmModel },
         embedding_config: { model: embedModel, dimension: embedDim },
         reminder_lead_points: leadArr,
+        feature_client_portal: portalEnabled,
       }
       // Only send secret fields if the user typed a NEW value.
       // Sending the sentinel placeholder back means "leave unchanged"
@@ -320,6 +323,39 @@ function SettingsScreen() {
             <p className="mt-1 text-xs text-gray-400">
               «0d» = نفس اليوم · «1d» = قبل يوم · «7d» = قبل أسبوع
             </p>
+          </div>
+        </section>
+
+        {/* ── ميزات اختيارية ──────────────────────────────────────── */}
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 font-semibold text-gray-800">الميزات الاختيارية</h2>
+          <div className="space-y-4">
+            {/* Client portal toggle */}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-800">بوابة العملاء</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  تفعيل بوابة العملاء يتيح للعملاء الوصول إلى قضاياهم ومستنداتهم
+                  وفواتيرهم عبر رابط مخصص. عند التعطيل تُرفض جميع طلبات{' '}
+                  <span dir="ltr" className="font-mono text-xs">/portal/*</span>.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={portalEnabled}
+                onClick={() => setPortalEnabled(v => !v)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  portalEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    portalEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </section>
 

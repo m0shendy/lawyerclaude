@@ -42,7 +42,7 @@ _ALL_COLS = (
     "id, firm_name, locale, waha_url, waha_key, llm_api_key, "
     "llm_provider_config, checkout_timeout_hours, "
     "embedding_config, reminder_lead_points, feature_appeal_deadlines, "
-    "subscription_metadata, created_at, updated_at"
+    "feature_client_portal, subscription_metadata, created_at, updated_at"
 )
 
 
@@ -58,6 +58,7 @@ class SettingsOut(BaseModel):
     embedding_config: dict[str, Any]
     reminder_lead_points: list[str]
     feature_appeal_deadlines: bool
+    feature_client_portal: bool
     subscription_metadata: dict[str, Any]
     created_at: str
     updated_at: str
@@ -74,6 +75,7 @@ class SettingsUpdate(BaseModel):
     embedding_config: dict[str, Any] | None = None
     reminder_lead_points: list[str] | None = None
     feature_appeal_deadlines: bool | None = None
+    feature_client_portal: bool | None = None
 
 
 def _row_to_out(row) -> SettingsOut:
@@ -108,6 +110,7 @@ def _row_to_out(row) -> SettingsOut:
         embedding_config=_ensure_dict(d.get("embedding_config")),
         reminder_lead_points=_ensure_list(d.get("reminder_lead_points")),
         feature_appeal_deadlines=bool(d.get("feature_appeal_deadlines")),
+        feature_client_portal=bool(d.get("feature_client_portal")),
         subscription_metadata=_ensure_dict(d.get("subscription_metadata")),
         created_at=str(d["created_at"]),
         updated_at=str(d["updated_at"]),
