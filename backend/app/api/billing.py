@@ -69,7 +69,7 @@ class TimeEntryRead(BaseModel):
 
 class TimeEntryCreate(BaseModel):
     case_id: UUID
-    date: date
+    entry_date: date
     duration_minutes: int = Field(gt=0)
     description: str = Field(min_length=1)
     is_billable: bool = True
@@ -77,7 +77,7 @@ class TimeEntryCreate(BaseModel):
 
 
 class TimeEntryUpdate(BaseModel):
-    date: date | None = None
+    entry_date: date | None = None
     duration_minutes: int | None = None
     description: str | None = None
     is_billable: bool | None = None
@@ -292,7 +292,7 @@ async def create_time_entry(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING {_TE_COLS}
         """,
-        body.case_id, user.id, body.date, body.duration_minutes,
+        body.case_id, user.id, body.entry_date, body.duration_minutes,
         body.description, body.is_billable, body.rate_egp, amount,
     )
     return _te_row(row)
@@ -316,6 +316,8 @@ async def update_time_entry(
         raise ApiError(409, "conflict", "لا يمكن تعديل قيد مرتبط بفاتورة")
 
     updates = body.model_dump(exclude_unset=True)
+    if "entry_date" in updates:
+        updates["date"] = updates.pop("entry_date")
     if not updates:
         return _te_row(existing)
 

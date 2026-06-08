@@ -13,22 +13,23 @@ All mutations go through the audited DB connection.  [C-III]
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.core.db import Db
 from app.core.errors import ApiError
 from app.core.rbac import LAWYER, MANAGER, PARALEGAL, assert_case_access, require_roles
 from app.core.security import CurrentUser, CurrentUserDep
-from app.models import Task, TaskCreate, TaskUpdate
+from app.models import Priority, Task, TaskCreate, TaskStatus, TaskUpdate
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_TASK_COLS = "id, case_id, assigned_to, description, due_date, status, created_at"
+_TASK_COLS = "id, case_id, assigned_to, description, due_date, status, priority, created_at"
 
 
 def _row(r) -> Task:
@@ -57,6 +58,62 @@ async def list_tasks(case_id: UUID, user: CurrentUserDep, conn: Db) -> list[Task
     return [_row(r) for r in rows]
 
 
+# ── GET /tasks — cross-case filtered list (FR-142) ───────────────────────────
+
+
+@router.get("/tasks", response_model=list[Task])
+async def list_tasks_filtered(
+    user: CurrentUserDep,
+    conn: Db,
+    priority: Annotated[Priority | None, Query()] = None,
+    status: Annotated[TaskStatus | None, Query()] = None,
+    assignee_id: Annotated[UUID | None, Query()] = None,
+    case_id: Annotated[UUID | None, Query()] = None,
+    due_before: Annotated[date | None, Query()] = None,
+    due_after: Annotated[date | None, Query()] = None,
+) -> list[Task]:
+    """Advanced task filtering across cases. Non-managers see only tasks on
+    their assigned cases or assigned to them (same scope as case access)."""
+    params: list = []
+    where: list[str] = []
+
+    def _add(clause: str, value) -> None:
+        params.append(value)
+        where.append(clause.format(n=len(params)))
+
+    if priority is not None:
+        _add("t.priority = ${n}", priority)
+    if status is not None:
+        _add("t.status = ${n}", status)
+    if assignee_id is not None:
+        _add("t.assigned_to = ${n}", assignee_id)
+    if case_id is not None:
+        _add("t.case_id = ${n}", case_id)
+    if due_before is not None:
+        _add("t.due_date <= ${n}", due_before)
+    if due_after is not None:
+        _add("t.due_date >= ${n}", due_after)
+
+    if user.role != MANAGER:
+        params.append(user.id)
+        where.append(
+            f"(t.assigned_to = ${len(params)} or exists ("
+            f"select 1 from case_assignments ca "
+            f"where ca.case_id = t.case_id and ca.user_id = ${len(params)}))"
+        )
+
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    rows = await conn.fetch(
+        f"""
+        SELECT {", ".join("t." + c.strip() for c in _TASK_COLS.split(","))}
+        FROM tasks t {where_sql}
+        ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
+        """,
+        *params,
+    )
+    return [_row(r) for r in rows]
+
+
 # ── POST /cases/{id}/tasks ────────────────────────────────────────────────────
 
 
@@ -79,14 +136,15 @@ async def create_task(
 
     row = await conn.fetchrow(
         f"""
-        INSERT INTO tasks (case_id, assigned_to, description, due_date, status)
-        VALUES ($1, $2, $3, $4, 'open')
+        INSERT INTO tasks (case_id, assigned_to, description, due_date, status, priority)
+        VALUES ($1, $2, $3, $4, 'open', $5)
         RETURNING {_TASK_COLS}
         """,
         case_id,
         body.assigned_to,
         body.description,
         body.due_date,
+        body.priority,
     )
     return _row(row)
 

@@ -8,7 +8,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import AppShell from '@/components/AppShell'
 import { MANAGER_ONLY, RequireRole } from '@/lib/rbac'
-import { apiGet, apiPatch, ApiError } from '@/lib/api'
+import { apiGet, apiPatch, apiPost, ApiError } from '@/lib/api'
 import type { FirmSettings } from '@/lib/types'
 
 const SECRET_PLACEHOLDER = '••••••••'
@@ -24,6 +24,10 @@ function SettingsScreen() {
   const [wahaUrl, setWahaUrl] = useState('')
   const [wahaKey, setWahaKey] = useState('')      // blank = do not change if set
   const [llmKey, setLlmKey] = useState('')        // blank = do not change if set
+  const [llmProvider, setLlmProvider] = useState('gemini')
+  const [llmModel, setLlmModel] = useState('models/gemini-2.0-flash')
+  const [testResult, setTestResult] = useState<string | null>(null)
+  const [testing, setTesting] = useState(false)
   const [embedModel, setEmbedModel] = useState('')
   const [embedDim, setEmbedDim] = useState(1536)
   const [leadPoints, setLeadPoints] = useState('')
@@ -37,6 +41,8 @@ function SettingsScreen() {
         setWahaUrl(s.waha_url ?? '')
         setWahaKey(s.waha_key_set ? SECRET_PLACEHOLDER : '')
         setLlmKey(s.llm_api_key_set ? SECRET_PLACEHOLDER : '')
+        setLlmProvider(s.llm_provider_config?.provider ?? 'gemini')
+        setLlmModel(s.llm_provider_config?.model ?? 'models/gemini-2.0-flash')
         setEmbedModel(s.embedding_config?.model ?? '')
         setEmbedDim(s.embedding_config?.dimension ?? 1536)
         setLeadPoints(s.reminder_lead_points?.join(', ') ?? '7d, 3d, 1d, 0d')
@@ -59,6 +65,7 @@ function SettingsScreen() {
       const body: Record<string, unknown> = {
         firm_name: firmName,
         waha_url: wahaUrl || null,
+        llm_provider_config: { provider: llmProvider, model: llmModel },
         embedding_config: { model: embedModel, dimension: embedDim },
         reminder_lead_points: leadArr,
       }
@@ -163,29 +170,100 @@ function SettingsScreen() {
           </div>
         </section>
 
-        {/* ── مفتاح الذكاء الاصطناعي ───────────────────────────────── */}
+        {/* ── مزوّد الذكاء الاصطناعي (FR-141) ──────────────────────── */}
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 font-semibold text-gray-800">الذكاء الاصطناعي — مفتاح API</h2>
+          <h2 className="mb-4 font-semibold text-gray-800">مزوّد الذكاء الاصطناعي</h2>
           <p className="mb-4 text-xs text-gray-500">
-            مفتاح Gemini (أو OpenAI) الخاص بالعميل — سرّي ومُعالَج كالمفتاح أعلاه.
+            تبديل المزوّد لا يتطلب أي تغيير برمجي — احفظ ثم اختبر الاتصال. المفتاح سرّي
+            ولا يُعرض بعد الحفظ؛ يُسجَّل التغيير في سجل التدقيق دون الكشف عن القيمة.
           </p>
-          <div>
-            <label className="mb-1 block text-sm font-medium" htmlFor="llmKey">
-              مفتاح LLM API
-              {settings?.llm_api_key_set && (
-                <span className="mr-2 text-xs text-green-700">● مضبوط</span>
-              )}
-            </label>
-            <input
-              id="llmKey"
-              type="password"
-              value={llmKey}
-              onChange={(e) => setLlmKey(e.target.value)}
-              placeholder={settings?.llm_api_key_set ? SECRET_PLACEHOLDER : 'أدخل مفتاح API'}
-              className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
-              dir="ltr"
-              autoComplete="new-password"
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium" htmlFor="llmProvider">
+                المزوّد
+              </label>
+              <select
+                id="llmProvider"
+                value={llmProvider}
+                onChange={(e) => setLlmProvider(e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="gemini">Gemini (Google)</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="mistral">Mistral</option>
+                <option value="groq">Groq</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium" htmlFor="llmModel">
+                النموذج
+              </label>
+              <input
+                id="llmModel"
+                value={llmModel}
+                onChange={(e) => setLlmModel(e.target.value)}
+                placeholder="models/gemini-2.0-flash"
+                className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
+                dir="ltr"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium" htmlFor="llmKey">
+                مفتاح LLM API
+                {settings?.llm_api_key_set && (
+                  <span className="mr-2 text-xs text-green-700">● مضبوط</span>
+                )}
+              </label>
+              <input
+                id="llmKey"
+                type="password"
+                value={llmKey}
+                onChange={(e) => setLlmKey(e.target.value)}
+                placeholder={settings?.llm_api_key_set ? SECRET_PLACEHOLDER : 'أدخل مفتاح API'}
+                className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
+                dir="ltr"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="button"
+              disabled={testing}
+              onClick={async () => {
+                setTesting(true)
+                setTestResult(null)
+                try {
+                  const r = await apiPost<{
+                    ok: boolean
+                    provider: string
+                    model: string
+                    latency_ms: number
+                  }>('/settings/llm-provider/test')
+                  setTestResult(`✓ ${r.provider}/${r.model} — ${r.latency_ms} م.ث`)
+                } catch (err) {
+                  setTestResult(
+                    `✗ ${err instanceof ApiError ? err.message : 'فشل اختبار الاتصال'}`
+                  )
+                } finally {
+                  setTesting(false)
+                }
+              }}
+              className="rounded border border-gray-300 px-4 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
+            >
+              {testing ? 'جارٍ الاختبار…' : 'اختبار الاتصال'}
+            </button>
+            {testResult && (
+              <span
+                className={`text-sm ${testResult.startsWith('✓') ? 'text-green-700' : 'text-red-700'}`}
+              >
+                {testResult}
+              </span>
+            )}
+            <span className="text-xs text-gray-400">
+              يختبر الإعدادات المحفوظة — احفظ أولًا بعد أي تغيير.
+            </span>
           </div>
         </section>
 

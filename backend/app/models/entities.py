@@ -18,10 +18,15 @@ Role = Literal["partner_manager", "lawyer", "paralegal", "secretary"]
 UserStatus = Literal["active", "inactive"]
 DocumentSourceType = Literal["text_pdf", "scanned"]
 DocumentStatus = Literal["pending", "processing", "ready", "low_confidence", "failed"]
-AiOutputType = Literal["summary", "extraction", "analysis", "clause_flag", "risk_signal"]
+AiOutputType = Literal[
+    "summary", "extraction", "analysis", "clause_flag", "risk_signal",
+    "doc_draft", "letter_pack", "case_timeline",
+]
 ReviewState = Literal["draft_unreviewed", "approved"]
 DeadlineType = Literal["general", "appeal_istinaf", "mu_arada", "naqd"]
 TaskStatus = Literal["open", "in_progress", "done", "cancelled"]
+Priority = Literal["low", "medium", "high"]
+CaseStage = Literal["intake", "active", "litigation", "settlement", "closed"]
 NotificationStatus = Literal["sent", "failed", "skipped"]
 ReportType = Literal["daily_what_happened", "tomorrow_tasks"]
 
@@ -76,6 +81,14 @@ class Case(BaseModel):
     court: str | None = None
     case_type: str | None = None
     status: str
+    # spec 002 matter extensions (0021)
+    practice_area: str | None = None
+    jurisdiction: str | None = None
+    opposing_counsel: str | None = None
+    docket_number: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    priority: Priority = "medium"
+    stage: CaseStage = "intake"
     created_by: UUID | None = None
     created_at: datetime
 
@@ -87,6 +100,13 @@ class CaseCreate(BaseModel):
     court: str | None = None
     case_type: str | None = None
     status: str = "open"
+    practice_area: str | None = None
+    jurisdiction: str | None = None
+    opposing_counsel: str | None = None
+    docket_number: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    priority: Priority = "medium"
+    stage: CaseStage = "intake"
 
 
 class CaseUpdate(BaseModel):
@@ -96,6 +116,13 @@ class CaseUpdate(BaseModel):
     court: str | None = None
     case_type: str | None = None
     status: str | None = None
+    practice_area: str | None = None
+    jurisdiction: str | None = None
+    opposing_counsel: str | None = None
+    docket_number: str | None = None
+    tags: list[str] | None = None
+    priority: Priority | None = None
+    stage: CaseStage | None = None
 
 
 class CaseAssignment(BaseModel):
@@ -119,6 +146,10 @@ class Document(BaseModel):
     file_name: str
     source_type: DocumentSourceType
     status: DocumentStatus
+    # spec 002 DMS (0022)
+    folder_id: UUID | None = None
+    access_level: Literal["public", "team", "restricted"] = "team"
+    is_confidential: bool = False
     ocr_confidence: float | None = None
     error_detail: str | None = None
     uploaded_by: UUID | None = None
@@ -200,6 +231,7 @@ class Task(BaseModel):
     description: str
     due_date: date | None = None
     status: TaskStatus
+    priority: Priority = "medium"
     created_at: datetime
 
 
@@ -207,6 +239,7 @@ class TaskCreate(BaseModel):
     assigned_to: UUID
     description: str = Field(min_length=1)
     due_date: date | None = None
+    priority: Priority = "medium"
 
 
 class TaskUpdate(BaseModel):
@@ -214,6 +247,7 @@ class TaskUpdate(BaseModel):
     description: str | None = None
     due_date: date | None = None
     status: TaskStatus | None = None
+    priority: Priority | None = None
 
 
 # ── logs ──────────────────────────────────────────────────────────────────────

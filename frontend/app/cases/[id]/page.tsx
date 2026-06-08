@@ -9,16 +9,22 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import AppShell from '@/components/AppShell'
+import ConflictCheckPanel from '@/components/ConflictCheckPanel'
 import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api'
 import { ALL_ROLES, RequireRole, useUser } from '@/lib/rbac'
 import {
+  CASE_STAGE_LABELS,
   DOCUMENT_STATUS_LABELS,
+  PRIORITY_COLORS,
+  PRIORITY_LABELS,
   ROLE_LABELS,
   type AiOutputType,
   type Case,
   type CaseAssignment,
+  type CaseStage,
   type Deadline,
   type Document,
+  type Priority,
   type ReviewState,
   type Role,
   type TaskItem,
@@ -62,6 +68,9 @@ const AI_TYPE_LABELS: Record<AiOutputType, string> = {
   analysis: 'تحليل',
   clause_flag: 'تنبيه بند',
   risk_signal: 'إشارة مخاطرة',
+  doc_draft: 'مسودة مستند',
+  letter_pack: 'حزمة خطابات',
+  case_timeline: 'جدول زمني للقضية',
 }
 
 const DEADLINE_TYPE_LABELS: Record<Deadline['type'], string> = {
@@ -108,6 +117,13 @@ function CaseFields({
     court: detail.court ?? '',
     case_type: detail.case_type ?? '',
     status: detail.status,
+    practice_area: detail.practice_area ?? '',
+    jurisdiction: detail.jurisdiction ?? '',
+    opposing_counsel: detail.opposing_counsel ?? '',
+    docket_number: detail.docket_number ?? '',
+    tags: (detail.tags ?? []).join(', '),
+    priority: detail.priority as Priority,
+    stage: detail.stage as CaseStage,
   })
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -120,6 +136,13 @@ function CaseFields({
       court: detail.court ?? '',
       case_type: detail.case_type ?? '',
       status: detail.status,
+      practice_area: detail.practice_area ?? '',
+      jurisdiction: detail.jurisdiction ?? '',
+      opposing_counsel: detail.opposing_counsel ?? '',
+      docket_number: detail.docket_number ?? '',
+      tags: (detail.tags ?? []).join(', '),
+      priority: detail.priority as Priority,
+      stage: detail.stage as CaseStage,
     })
     setError(null)
     setEditing(true)
@@ -137,6 +160,13 @@ function CaseFields({
         court: form.court || null,
         case_type: form.case_type || null,
         status: form.status,
+        practice_area: form.practice_area || null,
+        jurisdiction: form.jurisdiction || null,
+        opposing_counsel: form.opposing_counsel || null,
+        docket_number: form.docket_number || null,
+        tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        priority: form.priority,
+        stage: form.stage,
       })
       onSaved(updated)
       setEditing(false)
@@ -208,6 +238,76 @@ function CaseFields({
             ))}
           </select>
         </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">الأولوية</label>
+          <select
+            value={form.priority}
+            onChange={(e) => setForm({ ...form, priority: e.target.value as Priority })}
+            className={field}
+          >
+            {(Object.keys(PRIORITY_LABELS) as Priority[]).map((p) => (
+              <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">المرحلة</label>
+          <select
+            value={form.stage}
+            onChange={(e) => setForm({ ...form, stage: e.target.value as CaseStage })}
+            className={field}
+          >
+            {(Object.keys(CASE_STAGE_LABELS) as CaseStage[]).map((s) => (
+              <option key={s} value={s}>{CASE_STAGE_LABELS[s]}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">مجال الممارسة</label>
+          <input
+            value={form.practice_area}
+            onChange={(e) => setForm({ ...form, practice_area: e.target.value })}
+            placeholder="مدني، تجاري، عمالي…"
+            className={field}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">الاختصاص القضائي</label>
+          <input
+            value={form.jurisdiction}
+            onChange={(e) => setForm({ ...form, jurisdiction: e.target.value })}
+            className={field}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">رقم الدائرة / الجدول</label>
+          <input
+            value={form.docket_number}
+            onChange={(e) => setForm({ ...form, docket_number: e.target.value })}
+            className={field}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">وسوم (مفصولة بفاصلة)</label>
+          <input
+            value={form.tags}
+            onChange={(e) => setForm({ ...form, tags: e.target.value })}
+            className={field}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-sm font-medium">محامي الخصم</label>
+          <input
+            value={form.opposing_counsel}
+            onChange={(e) => setForm({ ...form, opposing_counsel: e.target.value })}
+            className={field}
+          />
+          {form.opposing_counsel.trim() && (
+            <div className="mt-2">
+              <ConflictCheckPanel partyName={form.opposing_counsel} />
+            </div>
+          )}
+        </div>
 
         {error && <p className="text-sm text-red-700 sm:col-span-2">{error}</p>}
 
@@ -237,6 +337,34 @@ function CaseFields({
     ['المحكمة', detail.court ?? '—'],
     ['نوع القضية', detail.case_type ?? '—'],
     ['الحالة', CASE_STATUS_LABELS[detail.status] ?? detail.status],
+    [
+      'الأولوية',
+      <span
+        key="priority"
+        className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORITY_COLORS[detail.priority ?? 'medium']}`}
+      >
+        {PRIORITY_LABELS[detail.priority ?? 'medium']}
+      </span>,
+    ],
+    ['المرحلة', CASE_STAGE_LABELS[detail.stage as CaseStage] ?? detail.stage ?? '—'],
+    ['مجال الممارسة', detail.practice_area ?? '—'],
+    ['الاختصاص القضائي', detail.jurisdiction ?? '—'],
+    ['محامي الخصم', detail.opposing_counsel ?? '—'],
+    ['رقم الدائرة / الجدول', detail.docket_number ?? '—'],
+    [
+      'الوسوم',
+      detail.tags && detail.tags.length > 0
+        ? (
+          <span className="flex flex-wrap gap-1">
+            {detail.tags.map((tag) => (
+              <span key={tag} className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                {tag}
+              </span>
+            ))}
+          </span>
+        )
+        : '—',
+    ],
     ['تاريخ الإنشاء', fmtDate(detail.created_at)],
   ]
 
@@ -245,7 +373,7 @@ function CaseFields({
       <dl className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
         {rows.map(([label, value]) => (
           <div key={label} className="flex gap-2">
-            <dt className="w-28 shrink-0 text-gray-500">{label}</dt>
+            <dt className="w-36 shrink-0 text-gray-500">{label}</dt>
             <dd className="font-medium">{value}</dd>
           </div>
         ))}

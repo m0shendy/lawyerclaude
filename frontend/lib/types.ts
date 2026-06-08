@@ -3,10 +3,34 @@
 export type Role = 'partner_manager' | 'lawyer' | 'paralegal' | 'secretary'
 export type UserStatus = 'active' | 'inactive'
 export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'low_confidence' | 'failed'
-export type AiOutputType = 'summary' | 'extraction' | 'analysis' | 'clause_flag' | 'risk_signal'
+export type AiOutputType =
+  | 'summary' | 'extraction' | 'analysis' | 'clause_flag' | 'risk_signal'
+  | 'doc_draft' | 'letter_pack' | 'case_timeline'
 export type ReviewState = 'draft_unreviewed' | 'approved'
 export type DeadlineType = 'general' | 'appeal_istinaf' | 'mu_arada' | 'naqd'
 export type TaskStatus = 'open' | 'in_progress' | 'done' | 'cancelled'
+export type Priority = 'low' | 'medium' | 'high'
+export type CaseStage = 'intake' | 'active' | 'litigation' | 'settlement' | 'closed'
+
+export const PRIORITY_LABELS: Record<Priority, string> = {
+  low: 'منخفضة',
+  medium: 'متوسطة',
+  high: 'عالية',
+}
+
+export const PRIORITY_COLORS: Record<Priority, string> = {
+  low: 'bg-gray-100 text-gray-600',
+  medium: 'bg-amber-100 text-amber-800',
+  high: 'bg-red-100 text-red-800',
+}
+
+export const CASE_STAGE_LABELS: Record<CaseStage, string> = {
+  intake: 'استقبال',
+  active: 'نشطة',
+  litigation: 'تقاضٍ',
+  settlement: 'تسوية',
+  closed: 'مغلقة',
+}
 
 export const ROLE_LABELS: Record<Role, string> = {
   partner_manager: 'شريك / مدير',
@@ -55,6 +79,14 @@ export interface Case {
   court: string | null
   case_type: string | null
   status: string
+  // spec 002 matter extensions
+  practice_area: string | null
+  jurisdiction: string | null
+  opposing_counsel: string | null
+  docket_number: string | null
+  tags: string[]
+  priority: Priority
+  stage: CaseStage
   created_by: string | null
   created_at: string
 }
@@ -73,6 +105,10 @@ export interface Document {
   file_name: string
   source_type: 'text_pdf' | 'scanned'
   status: DocumentStatus
+  // spec 002 DMS
+  folder_id: string | null
+  access_level: 'public' | 'team' | 'restricted'
+  is_confidential: boolean
   ocr_confidence: number | null
   error_detail: string | null
   uploaded_by: string | null
@@ -126,6 +162,7 @@ export interface TaskItem {
   description: string
   due_date: string | null
   status: TaskStatus
+  priority: Priority
   created_at: string
 }
 
@@ -148,6 +185,8 @@ export interface FirmSettings {
   waha_url: string | null
   waha_key_set: boolean
   llm_api_key_set: boolean
+  llm_provider_config: { provider: string; model: string }
+  checkout_timeout_hours: number
   embedding_config: { model: string; dimension: number }
   reminder_lead_points: string[]
   feature_appeal_deadlines: boolean
@@ -408,6 +447,62 @@ export interface Hearing {
 export interface HearingWithCase extends Hearing {
   case_title: string
   case_number: string | null
+}
+
+// ── Appointments & Calendar (spec 002 US7/US8) ────────────────────────────────
+
+export type AppointmentType = 'consultation' | 'follow_up' | 'checkup' | 'emergency'
+export type AppointmentStatus =
+  | 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled'
+
+export const APPOINTMENT_TYPE_LABELS: Record<AppointmentType, string> = {
+  consultation: 'استشارة',
+  follow_up: 'متابعة',
+  checkup: 'مراجعة',
+  emergency: 'طارئ',
+}
+
+export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatus, string> = {
+  scheduled: 'مجدول',
+  confirmed: 'مؤكَّد',
+  in_progress: 'قيد الانعقاد',
+  completed: 'منتهٍ',
+  cancelled: 'ملغى',
+}
+
+export const APPOINTMENT_STATUS_COLORS: Record<AppointmentStatus, string> = {
+  scheduled: 'bg-blue-100 text-blue-700',
+  confirmed: 'bg-green-100 text-green-700',
+  in_progress: 'bg-amber-100 text-amber-800',
+  completed: 'bg-gray-100 text-gray-600',
+  cancelled: 'bg-red-100 text-red-700',
+}
+
+export interface Appointment {
+  id: string
+  type: AppointmentType
+  case_id: string | null
+  contact_id: string | null
+  assigned_lawyer_id: string
+  scheduled_at: string
+  duration_minutes: number
+  status: AppointmentStatus
+  reason: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CalendarEvent {
+  id: string
+  event_type: 'hearing' | 'appointment'
+  title: string
+  starts_at: string
+  ends_at: string
+  case_id: string | null
+  assigned_lawyer_id: string | null
+  status: string
 }
 
 // ── Module D: Templates ───────────────────────────────────────────────────────

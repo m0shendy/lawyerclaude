@@ -373,3 +373,107 @@ async def unlink_contact_from_case(
     if deleted is None:
         raise ApiError(404, "not_found", "الارتباط غير موجود")
     return {"status": "unlinked", "id": str(deleted)}
+
+
+# ── POST /contacts/conflict-check (spec 002 FR-110) ───────────────────────────
+
+class ConflictMatch(BaseModel):
+    source: Literal["contact", "case_opposing_counsel"]
+    contact_id: UUID | None = None
+    contact_type: ContactType | None = None
+    case_id: UUID | None = None
+    case_title: str | None = None
+    case_role: str | None = None
+    matched_name: str
+    notes: str | None = None
+
+
+class ConflictCheckRequest(BaseModel):
+    party_name: str
+
+
+class ConflictCheckResponse(BaseModel):
+    result: Literal["clear", "conflict_found"]
+    conflicts: list[ConflictMatch]
+
+
+@router.post("/contacts/conflict-check", response_model=ConflictCheckResponse)
+async def conflict_check(
+    body: ConflictCheckRequest,
+    conn: Db,
+    user: CurrentUserDep,
+) -> ConflictCheckResponse:
+    """Full-text conflict check across the contacts registry and the
+    opposing-counsel field of non-closed matters (tsvector, R5).
+    Every run is recorded in conflict_check_log [C-III]."""
+    party = body.party_name.strip()
+    if not party:
+        raise ApiError(400, "validation_error", "اسم الطرف مطلوب لفحص التعارض")
+
+    matches: list[ConflictMatch] = []
+
+    # 1. Registry contacts whose name matches, with their case involvements.
+    contact_rows = await conn.fetch(
+        """
+        SELECT c.id AS contact_id, c.type, c.name_ar, c.notes,
+               cc.case_id, cc.role AS case_role, k.title AS case_title
+        FROM contacts c
+        LEFT JOIN case_contacts cc ON cc.contact_id = c.id
+        LEFT JOIN cases k ON k.id = cc.case_id AND k.stage != 'closed'
+        WHERE c.is_active
+          AND c.name_ar_tsvec @@ plainto_tsquery('arabic', $1)
+        LIMIT 50
+        """,
+        party,
+    )
+    for r in contact_rows:
+        matches.append(ConflictMatch(
+            source="contact",
+            contact_id=r["contact_id"],
+            contact_type=r["type"],
+            case_id=r["case_id"],
+            case_title=r["case_title"],
+            case_role=r["case_role"],
+            matched_name=r["name_ar"],
+            notes=r["notes"],
+        ))
+
+    # 2. Opposing counsel free-text on active matters.
+    case_rows = await conn.fetch(
+        """
+        SELECT id, title, opposing_counsel
+        FROM cases
+        WHERE stage != 'closed'
+          AND opposing_counsel_tsvec @@ plainto_tsquery('arabic', $1)
+        LIMIT 50
+        """,
+        party,
+    )
+    for r in case_rows:
+        matches.append(ConflictMatch(
+            source="case_opposing_counsel",
+            case_id=r["id"],
+            case_title=r["title"],
+            matched_name=r["opposing_counsel"] or party,
+        ))
+
+    result = "conflict_found" if matches else "clear"
+
+    # Log the check itself (audit trigger covers the insert) [C-III].
+    first = matches[0] if matches else None
+    await conn.execute(
+        """
+        INSERT INTO conflict_check_log
+            (checked_by, new_party_name, matched_case_id, matched_contact_id,
+             matched_party_name, result)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        """,
+        user.id,
+        party,
+        first.case_id if first else None,
+        first.contact_id if first else None,
+        first.matched_name if first else None,
+        result,
+    )
+
+    return ConflictCheckResponse(result=result, conflicts=matches)

@@ -8,6 +8,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
+import DmsControls from '@/components/DmsControls'
 import { ALL_ROLES, RequireRole } from '@/lib/rbac'
 import { apiGet, apiPost, ApiError } from '@/lib/api'
 import {
@@ -208,6 +209,16 @@ function DocumentDetailScreen() {
           </div>
         )}
       </section>
+
+      {/* إدارة الإصدارات والحجز والمشاركة (spec 002 US4) */}
+      <DmsControls
+        documentId={doc.id}
+        accessLevel={doc.access_level}
+        isConfidential={doc.is_confidential}
+        onMetaChange={() => {
+          void apiGet<Document>(`/documents/${doc.id}`).then(setDoc)
+        }}
+      />
 
       {/* إجراءات الذكاء الاصطناعي — متاحة بعد اكتمال المعالجة */}
       {(doc.status === 'ready' || doc.status === 'low_confidence') && (

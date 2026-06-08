@@ -18,12 +18,15 @@ const ALL: Role[] = ['partner_manager', 'lawyer', 'paralegal', 'secretary']
 
 const NAV: NavItem[] = [
   { href: '/dashboard',  label: 'لوحة المتابعة',       roles: ALL },
+  { href: '/calendar',   label: 'التقويم',              roles: ALL },
   { href: '/cases',      label: 'القضايا',              roles: ALL },
   { href: '/hearings',   label: 'الجلسات',              roles: ALL },
+  { href: '/appointments', label: 'مواعيد العملاء',     roles: ALL },
   { href: '/contacts',   label: 'الأطراف والجهات',      roles: ALL },
   { href: '/documents',  label: 'المستندات',            roles: ALL },
   { href: '/templates',  label: 'نماذج المستندات',      roles: ALL },
-  { href: '/deadlines',  label: 'المواعيد',             roles: ALL },
+  { href: '/ai-tools',   label: 'أدوات الذكاء للمستندات', roles: ['partner_manager', 'lawyer', 'paralegal'] },
+  { href: '/deadlines',  label: 'المواعيد القانونية',   roles: ALL },
   { href: '/tasks',      label: 'المهام',               roles: ['partner_manager', 'lawyer', 'paralegal'] },
   { href: '/billing',    label: 'الفواتير والأتعاب',    roles: ['partner_manager', 'secretary'] },
   { href: '/ai-review',  label: 'مراجعة الذكاء',       roles: ALL },

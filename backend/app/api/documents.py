@@ -42,7 +42,8 @@ ALLOWED_SOURCE_TYPES = ("text_pdf", "scanned")
 
 _DOCUMENT_COLUMNS = (
     "id, case_id, file_path, file_name, source_type, status, "
-    "ocr_confidence, error_detail, uploaded_by, uploaded_at"
+    "ocr_confidence, error_detail, uploaded_by, uploaded_at, "
+    "folder_id, access_level, is_confidential"
 )
 
 

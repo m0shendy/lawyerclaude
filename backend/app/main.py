@@ -96,17 +96,21 @@ def create_app() -> FastAPI:
     # Router includes — paths follow contracts/rest-api.md (no /api/v1 prefix).
     # ------------------------------------------------------------------
     from app.api import (
+        ai_doc,
         ai_outputs,
         analytics,
+        appointments,
         assignments,
         assistant,
         audit,
         auth,
         billing,
+        calendar,
         cases,
         contacts,
         correspondence,
         deadlines,
+        dms,
         documents,
         hearings,
         portal,
@@ -141,6 +145,12 @@ def create_app() -> FastAPI:
     app.include_router(correspondence.router, tags=["correspondence"])
     app.include_router(analytics.router,     tags=["analytics"])
     app.include_router(portal.router)  # prefix="/portal" set in router
+
+    # Spec 002 gap modules (DMS, appointments, calendar, AI doc features)
+    app.include_router(dms.router,           tags=["dms"])
+    app.include_router(appointments.router,  tags=["appointments"])
+    app.include_router(calendar.router,      tags=["calendar"])
+    app.include_router(ai_doc.router,        tags=["ai-doc"])
 
     return app
 
