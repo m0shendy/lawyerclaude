@@ -416,3 +416,147 @@ async def workload_report(
         start, end,
     )
     return [WorkloadRow(**dict(r)) for r in rows]
+
+
+# ── GET /analytics/financial (T082 / T084 frontend shape) ─────────────────────
+
+
+class PaymentMethodBreakdown(BaseModel):
+    method: str
+    amount: Decimal
+    count: int
+
+
+class MonthlyRevenueLine(BaseModel):
+    month: str
+    invoiced: Decimal
+    collected: Decimal
+
+
+class FinancialReport(BaseModel):
+    period_from: str
+    period_to: str
+    total_invoiced: Decimal
+    total_collected: Decimal
+    total_outstanding: Decimal
+    invoices_count: int
+    paid_count: int
+    partial_count: int
+    pending_count: int
+    cancelled_count: int
+    payment_methods: list[PaymentMethodBreakdown]
+    monthly_revenue: list[MonthlyRevenueLine]
+
+
+@router.get("/analytics/financial", response_model=FinancialReport)
+async def financial_report(
+    _: ManagerOnly,
+    conn: Db,
+    from_date: date = Query(default_factory=lambda: date.today().replace(day=1)),
+    to_date: date = Query(default_factory=date.today),
+) -> FinancialReport:
+    """Aggregated financial KPIs for the given date range. Deterministic — no LLM. [C-IV]"""
+    totals = await conn.fetchrow(
+        """
+        SELECT
+            coalesce(sum(total_egp), 0)                                           AS total_invoiced,
+            coalesce(sum(CASE WHEN status = 'paid'    THEN total_egp END), 0)     AS paid_invoiced,
+            coalesce(sum(CASE WHEN status = 'partial' THEN total_egp END), 0)     AS partial_invoiced,
+            count(*)                                                               AS invoices_count,
+            count(CASE WHEN status = 'paid'      THEN 1 END)                      AS paid_count,
+            count(CASE WHEN status = 'partial'   THEN 1 END)                      AS partial_count,
+            count(CASE WHEN status = 'pending'   THEN 1 END)                      AS pending_count,
+            count(CASE WHEN status = 'cancelled' THEN 1 END)                      AS cancelled_count
+        FROM invoices
+        WHERE issue_date BETWEEN $1 AND $2
+        """,
+        from_date, to_date,
+    )
+
+    collected_row = await conn.fetchrow(
+        """
+        SELECT coalesce(sum(p.amount_egp), 0) AS total_collected
+        FROM payments p
+        JOIN invoices i ON i.id = p.invoice_id
+        WHERE p.payment_date BETWEEN $1 AND $2
+        """,
+        from_date, to_date,
+    )
+
+    payment_rows = await conn.fetch(
+        """
+        SELECT p.method, coalesce(sum(p.amount_egp), 0) AS amount, count(*) AS cnt
+        FROM payments p
+        JOIN invoices i ON i.id = p.invoice_id
+        WHERE p.payment_date BETWEEN $1 AND $2
+        GROUP BY p.method ORDER BY amount DESC
+        """,
+        from_date, to_date,
+    )
+
+    monthly_rows = await conn.fetch(
+        """
+        SELECT
+            to_char(i.issue_date, 'YYYY-MM') AS month,
+            coalesce(sum(i.total_egp), 0)    AS invoiced,
+            coalesce(sum(
+                (SELECT coalesce(sum(p2.amount_egp), 0) FROM payments p2
+                 WHERE p2.invoice_id = i.id
+                   AND to_char(p2.payment_date, 'YYYY-MM') = to_char(i.issue_date, 'YYYY-MM'))
+            ), 0) AS collected
+        FROM invoices i
+        WHERE issue_date BETWEEN $1 AND $2
+        GROUP BY 1 ORDER BY 1
+        """,
+        from_date, to_date,
+    )
+
+    ti = Decimal(str(totals["total_invoiced"]))
+    tc = Decimal(str(collected_row["total_collected"]))
+    return FinancialReport(
+        period_from=str(from_date),
+        period_to=str(to_date),
+        total_invoiced=ti,
+        total_collected=tc,
+        total_outstanding=ti - tc,
+        invoices_count=int(totals["invoices_count"]),
+        paid_count=int(totals["paid_count"]),
+        partial_count=int(totals["partial_count"]),
+        pending_count=int(totals["pending_count"]),
+        cancelled_count=int(totals["cancelled_count"]),
+        payment_methods=[
+            PaymentMethodBreakdown(method=r["method"], amount=Decimal(str(r["amount"])), count=int(r["cnt"]))
+            for r in payment_rows
+        ],
+        monthly_revenue=[
+            MonthlyRevenueLine(month=r["month"], invoiced=Decimal(str(r["invoiced"])), collected=Decimal(str(r["collected"])))
+            for r in monthly_rows
+        ],
+    )
+
+
+# ── GET /analytics/dashboard (materialized KPIs, T082) ───────────────────────
+
+
+class DashboardKPIs(BaseModel):
+    open_matters: int
+    upcoming_hearings: int
+    upcoming_deadlines: int
+    pending_invoices: int
+    pending_review: int
+
+
+@router.get("/analytics/dashboard", response_model=DashboardKPIs)
+async def dashboard_kpis(
+    _: ManagerOnly,
+    conn: Db,
+) -> DashboardKPIs:
+    """Reads the `dashboard_kpis` materialized view. Deterministic — no LLM. [C-IV]"""
+    row = await conn.fetchrow("SELECT * FROM dashboard_kpis LIMIT 1")
+    if row is None:
+        # Fallback if view not yet populated
+        return DashboardKPIs(
+            open_matters=0, upcoming_hearings=0, upcoming_deadlines=0,
+            pending_invoices=0, pending_review=0,
+        )
+    return DashboardKPIs(**dict(row))

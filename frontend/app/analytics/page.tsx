@@ -41,7 +41,13 @@ export default function AnalyticsPage() {
       <AppShell>
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-xl font-bold">التقارير</h1>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/analytics/financial"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              💰 التقرير المالي
+            </Link>
             <Link
               href="/analytics/operational"
               className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"

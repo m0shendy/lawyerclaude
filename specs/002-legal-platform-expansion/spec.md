@@ -2,7 +2,7 @@
 
 **Feature Directory**: `specs/002-legal-platform-expansion`
 **Created**: 2026-06-07
-**Status**: Partially implemented — frontend components delivered 2026-06-08; backend + DB migration tasks remain per tasks.md
+**Status**: Implemented — 2026-06-09. All backend endpoints, migrations, and frontend pages delivered. Pending 3 user-applied migrations (0025–0027); see tasks.md for remaining user actions.
 **Scope**: Expands the existing platform with client management, a full document management
 system (DMS with versioning & check-in/out), billing & invoicing, hearing management,
 appointment scheduling, a unified calendar, client portal, analytics & reporting, and six

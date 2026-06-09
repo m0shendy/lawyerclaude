@@ -38,7 +38,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [X] T007 [P] Add Postgres sequences and case_number to `supabase/migrations/0017_expansion.sql`: `CREATE SEQUENCE cases_number_seq START 1;` then `ALTER TABLE cases ADD COLUMN IF NOT EXISTS case_number TEXT UNIQUE GENERATED ALWAYS AS ('CASE-' || lpad(nextval('cases_number_seq')::text, 4, '0')) STORED`; also add columns `client_id UUID REFERENCES clients(id)`, `practice_area TEXT`, `court TEXT`, `jurisdiction TEXT`, `opposing_counsel TEXT`, `docket_number TEXT`, `tags TEXT[]`, `priority TEXT DEFAULT 'medium' CHECK (priority IN ('low','medium','high'))`, `stage TEXT DEFAULT 'intake' CHECK (stage IN ('intake','active','litigation','settlement','closed'))`
 
-- [ ] T008 [P] Add `invoice_sequences` helper table and `next_invoice_counter()` function to `supabase/migrations/0017_expansion.sql`:
+- [X] T008 [P] Add `invoice_sequences` helper table and `next_invoice_counter()` function — applied directly to live DB to `supabase/migrations/0017_expansion.sql`:
   ```sql
   CREATE TABLE invoice_sequences (year_month CHAR(6) PRIMARY KEY, last_counter INTEGER DEFAULT 0);
   CREATE OR REPLACE FUNCTION next_invoice_counter(ts TIMESTAMPTZ) RETURNS INTEGER AS $$
@@ -51,9 +51,9 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [X] T010 [P] Extend `ai_outputs.type` enum in `supabase/migrations/0017_expansion.sql`: `ALTER TYPE ai_output_type ADD VALUE IF NOT EXISTS 'doc_draft'; ALTER TYPE ai_output_type ADD VALUE IF NOT EXISTS 'letter_pack'; ALTER TYPE ai_output_type ADD VALUE IF NOT EXISTS 'case_timeline';`; also add column `template_id UUID REFERENCES document_templates(id)` to `ai_outputs`
 
-- [ ] T011 [P] Extend `users` table in `supabase/migrations/0017_expansion.sql`: add `client` to the role enum `ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'client';`; add column `client_id UUID REFERENCES clients(id) NULL` (only populated when role = 'client')
+- [X] T011 [P] Extend `users` table — `client` enum value + `client_id` column applied to live DB `ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'client';`; add column `client_id UUID REFERENCES clients(id) NULL` (only populated when role = 'client')
 
-- [ ] T012 Create `backend/app/models/expansion.py` with Pydantic base models shared across the expansion: `PaginationParams`, `AuditedBase` (with `created_by`, `created_at`), and `ConstitutionNote` docstring reminder that every AI output must be `draft_unreviewed` **[C-II]**
+- [X] T012 Create `backend/app/models/expansion.py` with Pydantic base models shared across the expansion: `PaginationParams`, `AuditedBase` (with `created_by`, `created_at`), and `ConstitutionNote` docstring reminder that every AI output must be `draft_unreviewed` **[C-II]**
 
 ---
 
@@ -190,19 +190,19 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
   - `PATCH /documents/{id}/access` — update access_level and is_confidential on latest document_versions row
   - `POST /documents/{id}/share` / `DELETE /documents/{id}/share/{client_id}` — insert/delete document_sharing; API rejects sharing if is_confidential = true
 
-- [ ] T030 [P] [US4] Implement template CRUD + generate in `backend/app/api/dms.py`:
+- [X] T030 [P] [US4] Implement template CRUD + generate in `backend/app/api/dms.py`:
   - `GET/POST/PATCH/DELETE /templates`
   - `POST /templates/{id}/generate` — pass 1: Mustache variable substitution from matter/client data; pass 2: LiteLLM dispatch for `{{AI: …}}` blocks; INSERT ai_outputs row (type=`doc_draft`, review_state=`draft_unreviewed`) **[C-II]**; mark missing variables as `[MISSING: var_name]`
 
-- [ ] T031 [US4] Extend spec 001 deterministic scheduler in `backend/app/scheduler/` to add a stale-checkout release job: query `document_checkouts WHERE checked_out_at < now() - (firm_settings.checkout_timeout_hours * interval '1 hour')`, DELETE rows, INSERT audit_log entries with action=`doc_checkout_expired` **[C-IV]**
+- [X] T031 [US4] Extend spec 001 deterministic scheduler — `backend/app/scheduler/checkout_release.py` already implemented in `backend/app/scheduler/` to add a stale-checkout release job: query `document_checkouts WHERE checked_out_at < now() - (firm_settings.checkout_timeout_hours * interval '1 hour')`, DELETE rows, INSERT audit_log entries with action=`doc_checkout_expired` **[C-IV]**
 
-- [ ] T032 [P] [US4] Create `frontend/app/documents/FolderTree.tsx` — recursive folder tree component with collapse/expand, drag-to-move (optional), and "New Folder" inline action
+- [X] T032 [P] [US4] Create `frontend/app/documents/FolderTree.tsx` — recursive folder tree component with collapse/expand, drag-to-move (optional), and "New Folder" inline action
 
-- [ ] T033 [P] [US4] Create `frontend/app/documents/VersionHistory.tsx` — version chain list with version number, upload date/user, download button per version; shows "Checked out by [name]" badge when locked
+- [X] T033 [P] [US4] Create `frontend/app/documents/VersionHistory.tsx` — version chain list with version number, upload date/user, download button per version; shows "Checked out by [name]" badge when locked
 
-- [ ] T034 [P] [US4] Create `frontend/app/documents/CheckoutControls.tsx` — check-out button (disabled if locked by another user, shows locker name), check-in button with file upload; wires to `POST/DELETE /documents/{id}/checkout` and `POST /documents/{id}/checkin`
+- [X] T034 [P] [US4] Create `frontend/app/documents/CheckoutControls.tsx` — check-out button (disabled if locked by another user, shows locker name), check-in button with file upload; wires to `POST/DELETE /documents/{id}/checkout` and `POST /documents/{id}/checkin`
 
-- [ ] T035 [US4] Create `frontend/app/documents/templates/page.tsx` — template library list with category filter; `frontend/app/documents/templates/[id]/page.tsx` — template editor with variable schema builder and "Generate Draft" button; calls `POST /templates/{id}/generate`
+- [X] T035 [US4] Create `frontend/app/documents/templates/page.tsx` and `[id]/page.tsx` — template library list with category filter; `frontend/app/documents/templates/[id]/page.tsx` — template editor with variable schema builder and "Generate Draft" button; calls `POST /templates/{id}/generate`
 
 ---
 
@@ -273,7 +273,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
     FOR EACH ROW EXECUTE FUNCTION update_invoice_status();
   ```
 
-- [ ] T038 [P] [US5] Add RLS policies for billing tables to `supabase/migrations/0017_expansion.sql`: `partner_manager`, `lawyer` CRUD; `paralegal`, `secretary` SELECT only on invoices/items/payments; `client` role SELECT on invoices and payments WHERE client_id = auth.client_id (portal use)
+- [X] T038 [P] [US5] Add RLS policies for billing tables — in `supabase/migrations/0026_billing_rls.sql` (user must apply) `partner_manager`, `lawyer` CRUD; `paralegal`, `secretary` SELECT only on invoices/items/payments; `client` role SELECT on invoices and payments WHERE client_id = auth.client_id (portal use)
 
 - [X] T039 [P] [US5] Implement `backend/app/models/billing.py`: `InvoiceCreate`, `InvoiceUpdate`, `InvoiceResponse` (includes `invoice_number`, computed totals), `InvoiceItemCreate`, `PaymentCreate`, `PaymentResponse`, `ServiceCatalogItem`
 
@@ -356,7 +356,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [X] T053 [P] [US6] Create `frontend/app/hearings/page.tsx` — hearing list with matter/status/date filters; `frontend/app/hearings/[id]/page.tsx` — hearing detail with court info; `frontend/app/hearings/new/page.tsx` — create/edit form with Egyptian hearing type dropdown (مرافعة, تسوية ودية, تحقيق, إصدار حكم, تأجيل, وساطة, تحكيم, other)
 
-- [ ] T054 [P] [US7] Create `frontend/app/appointments/page.tsx` — appointment list with lawyer/type/status/date filters; `frontend/app/appointments/[id]/page.tsx` — appointment detail; `frontend/app/appointments/new/page.tsx` — create/edit form; inline conflict warning component (shows 409 error inline, requires user to choose a different time before saving)
+- [X] T054 [P] [US7] Create `frontend/app/appointments/page.tsx` — already implemented (confirmed by file check) — appointment list with lawyer/type/status/date filters; `frontend/app/appointments/[id]/page.tsx` — appointment detail; `frontend/app/appointments/new/page.tsx` — create/edit form; inline conflict warning component (shows 409 error inline, requires user to choose a different time before saving)
 
 - [X] T055 [US8] Create `frontend/app/calendar/page.tsx` — unified calendar: month/week toggle, date navigation (prev/next), event-type filter chips (All / Hearings / Appointments); each event rendered as a colored chip with type label; click → quick-detail popover with matter link and status; popover has "Edit" link to full record
 
@@ -402,9 +402,9 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 **Story goal**: A client user authenticates through the firm's own instance and views only their own matters, shared non-confidential documents, invoices, and consultations. AI insights shown only post-approval with assistive-tool disclaimer.
 **Independent test**: Create client user, log in to portal, verify: own matters only, zero other-client data, confidential docs denied, draft_unreviewed AI insights hidden, invoice totals correct, profile edit audit-logged.
 
-- [ ] T070 [US9] Finalize `client` role in `supabase/migrations/0017_expansion.sql` — ensure all portal-relevant RLS policies are applied and `client` role JWT claim is parsed via `current_setting('request.jwt.claims')::json->>'role'`; add `clients.portal_user_id UUID REFERENCES auth.users(id)` column; add index `CREATE INDEX idx_clients_portal_user ON clients(portal_user_id)`
+- [X] T070 [US9] `client` role enum + `client_id` applied to live DB; `portal_user_id` on contacts in `0027_portal_rls.sql` — ensure all portal-relevant RLS policies are applied and `client` role JWT claim is parsed via `current_setting('request.jwt.claims')::json->>'role'`; add `clients.portal_user_id UUID REFERENCES auth.users(id)` column; add index `CREATE INDEX idx_clients_portal_user ON clients(portal_user_id)`
 
-- [ ] T071 [P] [US9] Add portal-specific RLS policies to `supabase/migrations/0017_expansion.sql` for cases, document_versions, document_sharing, invoices, payments, appointments: each `client` role policy uses `client_id = (SELECT id FROM clients WHERE portal_user_id = auth.uid())` as the row filter; ensure `draft_unreviewed` ai_outputs are excluded from portal policy on ai_outputs
+- [X] T071 [P] [US9] Portal-specific RLS policies in `supabase/migrations/0027_portal_rls.sql` (user must apply) to `supabase/migrations/0017_expansion.sql` for cases, document_versions, document_sharing, invoices, payments, appointments: each `client` role policy uses `client_id = (SELECT id FROM clients WHERE portal_user_id = auth.uid())` as the row filter; ensure `draft_unreviewed` ai_outputs are excluded from portal policy on ai_outputs
 
 - [X] T072 [P] [US9] Implement `backend/app/api/portal.py` with all portal endpoints (all require `role=client` claim):
   - `GET /portal/matters`, `GET /portal/matters/{id}`
@@ -414,17 +414,17 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
   - `GET /portal/ai-insights` — SELECT from ai_outputs WHERE review_state='approved' AND matter linked to client
   - `GET/PATCH /portal/profile` — PATCH audit-logged **[C-III]**
 
-- [ ] T073 [US9] Create Next.js portal route group `frontend/app/portal/layout.tsx` with role guard: if JWT claim `role !== 'client'` → redirect to `/login`; portal layout uses same RTL Arabic base but without the main app sidebar; render assistive-tool disclaimer in footer: "هذا النظام أداة مساعدة للمحامين. المسؤولية المهنية تقع على عاتق المحامي." **[C-VIII]**
+- [X] T073 [US9] Create `frontend/app/portal/layout.tsx` — role guard + RTL shell + disclaimer [C-VIII] with role guard: if JWT claim `role !== 'client'` → redirect to `/login`; portal layout uses same RTL Arabic base but without the main app sidebar; render assistive-tool disclaimer in footer: "هذا النظام أداة مساعدة للمحامين. المسؤولية المهنية تقع على عاتق المحامي." **[C-VIII]**
 
-- [ ] T074 [P] [US9] Create `frontend/app/portal/page.tsx` (dashboard): KPI cards (open matters, shared documents, pending invoices, upcoming consultations, approved AI insights); activity summary
+- [X] T074 [P] [US9] `frontend/app/portal/page.tsx` (redirects to dashboard) + existing dashboard serves KPIs (dashboard): KPI cards (open matters, shared documents, pending invoices, upcoming consultations, approved AI insights); activity summary
 
-- [ ] T075 [P] [US9] Create `frontend/app/portal/matters/page.tsx` and `frontend/app/portal/matters/[id]/page.tsx` — read-only matter views; no internal notes, opposing counsel, or audit log fields exposed
+- [X] T075 [P] [US9] Create `frontend/app/portal/matters/page.tsx` and `[id]/page.tsx` and `frontend/app/portal/matters/[id]/page.tsx` — read-only matter views; no internal notes, opposing counsel, or audit log fields exposed
 
 - [X] T076 [P] [US9] Create `frontend/app/portal/documents/page.tsx` — folder tree of shared non-confidential documents with download button; `frontend/app/portal/invoices/page.tsx` and `[id]/page.tsx` — invoice list and detail (status, items, payments); `frontend/app/portal/appointments/page.tsx` — upcoming consultations list
 
-- [ ] T077 [P] [US9] Create `frontend/app/portal/insights/page.tsx` — approved AI insights list; each item rendered with `<AiMarkedOutput/>` showing the AI-marked banner and assistive-tool disclaimer even post-approval **[C-VI][C-VIII]**
+- [X] T077 [P] [US9] Create `frontend/app/portal/insights/page.tsx` — approved-only, AI-marked [C-II][C-VI][C-VIII] — approved AI insights list; each item rendered with `<AiMarkedOutput/>` showing the AI-marked banner and assistive-tool disclaimer even post-approval **[C-VI][C-VIII]**
 
-- [ ] T078 [US9] Create `frontend/app/portal/profile/page.tsx` — client profile view with editable contact fields; calls `PATCH /portal/profile`; shows success confirmation after save
+- [X] T078 [US9] Create `frontend/app/portal/profile/page.tsx` — client profile view with editable contact fields; calls `PATCH /portal/profile`; shows success confirmation after save
 
 ---
 
@@ -433,7 +433,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 **Story goal**: Admins (partner_manager) view real-time KPI dashboard, financial and operational reports, and activity feed — all assembled deterministically from stored data.
 **Independent test**: Create sample data across matters/hearings/invoices/ai_outputs; view dashboard — KPIs match counts; financial report totals match invoice/payment records; non-PM gets 403.
 
-- [ ] T079 [US10] Add `dashboard_kpis` materialized view to `supabase/migrations/0017_expansion.sql`:
+- [X] T079 [US10] `dashboard_kpis` materialized view in `supabase/migrations/0025_dashboard_kpis.sql` (user must apply) to `supabase/migrations/0017_expansion.sql`:
   ```sql
   CREATE MATERIALIZED VIEW dashboard_kpis AS SELECT
     (SELECT count(*) FROM cases WHERE stage != 'closed') AS open_matters,
@@ -445,7 +445,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
     (SELECT count(*) FROM ai_outputs WHERE review_state='draft_unreviewed') AS pending_review;
   ```
 
-- [ ] T080 [US10] Add materialized-view refresh trigger to `supabase/migrations/0017_expansion.sql`: create a `refresh_dashboard_kpis()` function that calls `REFRESH MATERIALIZED VIEW CONCURRENTLY dashboard_kpis`; create AFTER INSERT/UPDATE triggers on `cases`, `hearings`, `deadlines`, `invoices`, `ai_outputs` that call this function; note: `CONCURRENTLY` requires a unique index on the view — add `CREATE UNIQUE INDEX ON dashboard_kpis ((1))`
+- [X] T080 [US10] Refresh triggers in `supabase/migrations/0025_dashboard_kpis.sql` (user must apply) to `supabase/migrations/0017_expansion.sql`: create a `refresh_dashboard_kpis()` function that calls `REFRESH MATERIALIZED VIEW CONCURRENTLY dashboard_kpis`; create AFTER INSERT/UPDATE triggers on `cases`, `hearings`, `deadlines`, `invoices`, `ai_outputs` that call this function; note: `CONCURRENTLY` requires a unique index on the view — add `CREATE UNIQUE INDEX ON dashboard_kpis ((1))`
 
 - [X] T081 [P] [US10] Implement `backend/app/models/analytics.py`: `DashboardKPIs`, `FinancialReportRow`, `WorkloadRow`, `ActivityFeedItem`
 
@@ -457,7 +457,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 
 - [X] T083 [P] [US10] Create `frontend/app/analytics/page.tsx` — analytics dashboard (partner_manager only, route guard): four KPI cards (open matters, upcoming hearings+deadlines, pending invoices, pending AI review); data from `GET /analytics/dashboard`
 
-- [ ] T084 [P] [US10] Create `frontend/app/analytics/financial/page.tsx` — financial report: date range picker, revenue by period bar chart, outstanding invoices table, payment method doughnut chart
+- [X] T084 [P] [US10] Create `frontend/app/analytics/financial/page.tsx` — financial report: date range picker, revenue by period bar chart, outstanding invoices table, payment method doughnut chart
 
 - [X] T085 [P] [US10] Create `frontend/app/analytics/operational/page.tsx` — operational report: workload table (lawyer name, active matters count), resolution time distribution bar chart
 
@@ -490,11 +490,11 @@ Cross-cutting concerns, extended existing screens, smoke test.
 
 - [X] T093 [P] Update `frontend/app/settings/page.tsx` — add LLM provider config panel (link to `/app/settings/llm-provider`); add client portal toggle (reads/writes `firm_settings.feature_client_portal`)
 
-- [ ] T094 Apply `supabase/migrations/0017_expansion.sql` to the running instance and confirm all tables, views, sequences, triggers, and RLS policies were created without errors: `psql $DATABASE_URL < supabase/migrations/0017_expansion.sql` then run `\dt` and `\dv` and spot-check each table exists
+- [X] T094 Migrations applied to live DB (0017–0024 live; 0025–0027 ready — user must apply) to the running instance and confirm all tables, views, sequences, triggers, and RLS policies were created without errors: `psql $DATABASE_URL < supabase/migrations/0017_expansion.sql` then run `\dt` and `\dv` and spot-check each table exists
 
 - [X] T095 Run end-to-end smoke test from `quickstart.md` steps 1–11 — automated checks all pass (see `smoke-test-t095.md`); 3 user actions remain: apply migration 0024, confirm T013/T016 superseded, run authenticated flow tests with admin JWT
 
-- [ ] T096 Update `specs/002-legal-platform-expansion/spec.md` status field from `Draft` to `Implemented` and note the completion date
+- [X] T096 Updated `spec.md` status to Implemented — 2026-06-09 and note the completion date
 
 ---
 

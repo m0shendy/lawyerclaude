@@ -518,3 +518,259 @@ async def unshare_document(
     if deleted is None:
         raise ApiError(404, "not_found", "المشاركة غير موجودة")
     return {"status": "unshared", "id": str(deleted)}
+
+
+# ── document templates (T030) ─────────────────────────────────────────────────
+#
+# Two-pass generation:
+#   Pass 1: Mustache-style {{variable}} substitution from matter/client data.
+#   Pass 2: LiteLLM dispatch for {{AI: …}} instruction blocks.
+# Every generated output is born draft_unreviewed [C-II].
+# Missing variables are marked [MISSING: var_name] — never left blank [C-II].
+
+
+import re as _re
+
+_TEMPLATE_COLS = (
+    "id, name, name_ar, category, content_template, variables_schema, "
+    "created_by, created_at"
+)
+
+
+class TemplateBase(BaseModel):
+    name: str
+    name_ar: str
+    category: str | None = None  # contract, submission, engagement_letter, letter, other
+    content_template: str
+    variables_schema: list[dict] = []
+
+
+class TemplateCreate(TemplateBase):
+    pass
+
+
+class TemplateUpdate(BaseModel):
+    name: str | None = None
+    name_ar: str | None = None
+    category: str | None = None
+    content_template: str | None = None
+    variables_schema: list[dict] | None = None
+
+
+class TemplateResponse(TemplateBase):
+    id: UUID
+    created_by: UUID | None = None
+    created_at: datetime
+
+
+class GenerateFromTemplateRequest(BaseModel):
+    case_id: UUID
+    context: str | None = None
+
+
+@router.get("/templates", response_model=list[TemplateResponse])
+async def list_templates(
+    user: CurrentUserDep,
+    conn: Db,
+    category: str | None = None,
+) -> list[TemplateResponse]:
+    if category:
+        rows = await conn.fetch(
+            f"SELECT {_TEMPLATE_COLS} FROM document_templates WHERE category = $1 ORDER BY name_ar",
+            category,
+        )
+    else:
+        rows = await conn.fetch(
+            f"SELECT {_TEMPLATE_COLS} FROM document_templates ORDER BY name_ar"
+        )
+    return [TemplateResponse(**dict(r)) for r in rows]
+
+
+@router.post("/templates", response_model=TemplateResponse, status_code=201)
+async def create_template(
+    body: TemplateCreate,
+    conn: Db,
+    user: Annotated[CurrentUser, Depends(require_roles(MANAGER, LAWYER))],
+) -> TemplateResponse:
+    import json as _json
+    row = await conn.fetchrow(
+        f"""
+        INSERT INTO document_templates
+            (name, name_ar, category, content_template, variables_schema, created_by)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+        RETURNING {_TEMPLATE_COLS}
+        """,
+        body.name, body.name_ar, body.category,
+        body.content_template, _json.dumps(body.variables_schema), user.id,
+    )
+    return TemplateResponse(**dict(row))
+
+
+@router.get("/templates/{template_id}", response_model=TemplateResponse)
+async def get_template(template_id: UUID, user: CurrentUserDep, conn: Db) -> TemplateResponse:
+    row = await conn.fetchrow(
+        f"SELECT {_TEMPLATE_COLS} FROM document_templates WHERE id = $1", template_id
+    )
+    if row is None:
+        raise ApiError(404, "not_found", "النموذج غير موجود")
+    return TemplateResponse(**dict(row))
+
+
+@router.patch("/templates/{template_id}", response_model=TemplateResponse)
+async def update_template(
+    template_id: UUID,
+    body: TemplateUpdate,
+    conn: Db,
+    user: Annotated[CurrentUser, Depends(require_roles(MANAGER, LAWYER))],
+) -> TemplateResponse:
+    import json as _json
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        row = await conn.fetchrow(
+            f"SELECT {_TEMPLATE_COLS} FROM document_templates WHERE id = $1", template_id
+        )
+        if row is None:
+            raise ApiError(404, "not_found", "النموذج غير موجود")
+        return TemplateResponse(**dict(row))
+
+    params: list = []
+    parts: list[str] = []
+    for field, value in updates.items():
+        if field == "variables_schema":
+            value = _json.dumps(value)
+            parts.append(f"{field} = ${len(params)+1}::jsonb")
+        else:
+            parts.append(f"{field} = ${len(params)+1}")
+        params.append(value)
+    params.append(template_id)
+    row = await conn.fetchrow(
+        f"""
+        UPDATE document_templates SET {', '.join(parts)}
+        WHERE id = ${len(params)}
+        RETURNING {_TEMPLATE_COLS}
+        """,
+        *params,
+    )
+    if row is None:
+        raise ApiError(404, "not_found", "النموذج غير موجود")
+    return TemplateResponse(**dict(row))
+
+
+@router.delete("/templates/{template_id}", status_code=200)
+async def delete_template(
+    template_id: UUID,
+    conn: Db,
+    user: Annotated[CurrentUser, Depends(require_roles(MANAGER, LAWYER))],
+) -> dict:
+    deleted = await conn.fetchval(
+        "DELETE FROM document_templates WHERE id = $1 RETURNING id", template_id
+    )
+    if deleted is None:
+        raise ApiError(404, "not_found", "النموذج غير موجود")
+    return {"status": "deleted", "id": str(deleted)}
+
+
+@router.post("/templates/{template_id}/generate", status_code=201)
+async def generate_from_template(
+    template_id: UUID,
+    body: GenerateFromTemplateRequest,
+    conn: Db,
+    user: Annotated[CurrentUser, Depends(require_roles(MANAGER, LAWYER))],
+) -> dict:
+    """Two-pass template generation → ai_outputs row (draft_unreviewed) [C-II].
+
+    Pass 1: Mustache substitution of {{var}} from matter/client context.
+    Pass 2: LiteLLM dispatch for {{AI: <instruction>}} blocks.
+    Missing variables → [MISSING: var_name] placeholders, never left blank.
+    """
+    import json as _json
+    from app.llm.providers import dispatch as llm_dispatch, LLMProviderError
+
+    tpl_row = await conn.fetchrow(
+        f"SELECT {_TEMPLATE_COLS} FROM document_templates WHERE id = $1", template_id
+    )
+    if tpl_row is None:
+        raise ApiError(404, "not_found", "النموذج غير موجود")
+
+    # Fetch matter context for variable substitution
+    case_row = await conn.fetchrow(
+        """
+        SELECT c.title, c.case_number, c.practice_area, c.stage,
+               con.name AS client_name, con.phone AS client_phone, con.email AS client_email
+        FROM cases c
+        LEFT JOIN contacts con ON con.id = c.client_contact_id
+        WHERE c.id = $1
+        """,
+        body.case_id,
+    )
+    if case_row is None:
+        raise ApiError(404, "not_found", "القضية غير موجودة")
+
+    ctx: dict[str, str] = {
+        "case_title": case_row["title"] or "",
+        "case_number": case_row["case_number"] or "",
+        "practice_area": case_row["practice_area"] or "",
+        "client_name": case_row["client_name"] or "",
+        "client_phone": case_row["client_phone"] or "",
+        "client_email": case_row["client_email"] or "",
+        "context": body.context or "",
+    }
+
+    # Pass 1: substitute {{variable}} placeholders
+    content = tpl_row["content_template"]
+
+    def _substitute(match: "_re.Match[str]") -> str:
+        var = match.group(1).strip()
+        val = ctx.get(var)
+        if val:
+            return val
+        return f"[MISSING: {var}]"
+
+    content = _re.sub(r"\{\{(?!AI:)([^}]+)\}\}", _substitute, content)
+
+    # Pass 2: replace {{AI: <instruction>}} blocks via LLM [C-II]
+    ai_blocks = list(_re.finditer(r"\{\{AI:\s*([^}]+)\}\}", content))
+    if ai_blocks:
+        firm_row = await conn.fetchrow(
+            "SELECT llm_provider_config, llm_api_key FROM firm_settings LIMIT 1"
+        )
+        if firm_row is None:
+            raise ApiError(503, "no_settings", "لم يتم تهيئة إعدادات الشركة")
+
+        for match in reversed(ai_blocks):
+            instruction = match.group(1).strip()
+            prompt = (
+                f"أنت مساعد قانوني. أكمل الجزء التالي من المستند وفقًا للتعليمات:\n"
+                f"التعليمات: {instruction}\n"
+                f"سياق القضية: {body.context or 'غير محدد'}\n"
+                f"العميل: {ctx['client_name']}\n"
+                f"رقم القضية: {ctx['case_number']}\n"
+                "اكتب النص فقط دون تعليقات."
+            )
+            try:
+                ai_text = await llm_dispatch(prompt, [], firm_row)
+            except LLMProviderError as exc:
+                logger.warning("LLM failed for AI block in template generate: %s", exc)
+                ai_text = f"[MISSING: AI block — {instruction}]"
+            content = content[:match.start()] + ai_text + content[match.end():]
+
+    # Fetch firm settings for review (needed to build output)
+    output_row = await conn.fetchrow(
+        f"""
+        INSERT INTO ai_outputs
+            (case_id, type, content, review_state, source_links, created_by, template_id)
+        VALUES ($1, 'doc_draft', $2::jsonb, 'draft_unreviewed', '[]'::jsonb, $3, $4)
+        RETURNING id, type, review_state, created_at
+        """,
+        body.case_id,
+        _json.dumps({"draft": content, "template_name": tpl_row["name_ar"]}),
+        user.id,
+        template_id,
+    )
+    return {
+        "output_id": str(output_row["id"]),
+        "review_state": output_row["review_state"],
+        "type": output_row["type"],
+        "created_at": output_row["created_at"].isoformat(),
+        "preview": content[:500] + ("…" if len(content) > 500 else ""),
+    }

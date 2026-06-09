@@ -364,3 +364,143 @@ async def portal_invoices(pa_id: UUID = Depends(get_portal_access_id)) -> list[P
             )
             for r in rows
         ]
+
+
+# ── GET /portal/appointments ──────────────────────────────────────────────────
+
+
+class PortalAppointment(BaseModel):
+    id: UUID
+    type: str
+    scheduled_at: str
+    duration_minutes: int
+    status: str
+    reason: str | None = None
+
+
+@router.get("/appointments", response_model=list[PortalAppointment])
+async def portal_appointments(pa_id: UUID = Depends(get_portal_access_id)) -> list[PortalAppointment]:
+    async with db_connection(user=None, context="portal:appointments") as conn:
+        contact_id = await _get_contact_for_portal(conn, pa_id)
+        rows = await conn.fetch(
+            """
+            SELECT id, type, scheduled_at, duration_minutes, status, reason
+            FROM appointments
+            WHERE client_contact_id = $1
+              AND status NOT IN ('cancelled','completed')
+            ORDER BY scheduled_at
+            """,
+            contact_id,
+        )
+        return [
+            PortalAppointment(
+                id=r["id"], type=r["type"],
+                scheduled_at=r["scheduled_at"].isoformat(),
+                duration_minutes=r["duration_minutes"],
+                status=r["status"], reason=r["reason"],
+            )
+            for r in rows
+        ]
+
+
+# ── GET /portal/ai-insights ───────────────────────────────────────────────────
+# Only APPROVED outputs linked to the portal client's cases [C-II].
+
+
+class PortalInsight(BaseModel):
+    id: UUID
+    type: str
+    content: dict
+    approved_at: str | None
+    source_links: list[dict]
+
+
+@router.get("/ai-insights", response_model=list[PortalInsight])
+async def portal_ai_insights(pa_id: UUID = Depends(get_portal_access_id)) -> list[PortalInsight]:
+    async with db_connection(user=None, context="portal:ai_insights") as conn:
+        contact_id = await _get_contact_for_portal(conn, pa_id)
+        rows = await conn.fetch(
+            """
+            SELECT ao.id, ao.type, ao.content, ao.approved_at, ao.source_links
+            FROM ai_outputs ao
+            JOIN cases c ON c.id = ao.case_id
+            JOIN case_contacts cc ON cc.case_id = c.id AND cc.contact_id = $1
+            WHERE ao.review_state = 'approved'
+            ORDER BY ao.approved_at DESC
+            """,
+            contact_id,
+        )
+        return [
+            PortalInsight(
+                id=r["id"], type=r["type"],
+                content=dict(r["content"]) if r["content"] else {},
+                approved_at=r["approved_at"].isoformat() if r["approved_at"] else None,
+                source_links=list(r["source_links"]) if r["source_links"] else [],
+            )
+            for r in rows
+        ]
+
+
+# ── GET/PATCH /portal/profile ─────────────────────────────────────────────────
+
+
+class PortalProfile(BaseModel):
+    id: UUID
+    name: str
+    phone: str | None = None
+    email: str | None = None
+    address: str | None = None
+
+
+class PortalProfileUpdate(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    address: str | None = None
+
+
+@router.get("/profile", response_model=PortalProfile)
+async def portal_get_profile(pa_id: UUID = Depends(get_portal_access_id)) -> PortalProfile:
+    async with db_connection(user=None, context="portal:profile") as conn:
+        contact_id = await _get_contact_for_portal(conn, pa_id)
+        row = await conn.fetchrow(
+            "SELECT id, name, phone, email, address FROM contacts WHERE id = $1",
+            contact_id,
+        )
+        if row is None:
+            from app.core.errors import ApiError as _ApiError
+            raise _ApiError(404, "not_found", "الملف الشخصي غير موجود")
+        return PortalProfile(**dict(row))
+
+
+@router.patch("/profile", response_model=PortalProfile)
+async def portal_update_profile(
+    body: PortalProfileUpdate,
+    pa_id: UUID = Depends(get_portal_access_id),
+) -> PortalProfile:
+    """PATCH is audit-logged via DB trigger [C-III]."""
+    async with db_connection(user=None, context="portal:profile_update") as conn:
+        contact_id = await _get_contact_for_portal(conn, pa_id)
+        updates = body.model_dump(exclude_unset=True)
+        if not updates:
+            row = await conn.fetchrow(
+                "SELECT id, name, phone, email, address FROM contacts WHERE id = $1",
+                contact_id,
+            )
+            return PortalProfile(**dict(row))
+
+        params: list = []
+        parts: list[str] = []
+        for field, value in updates.items():
+            params.append(value)
+            parts.append(f"{field} = ${len(params)}")
+        params.append(contact_id)
+        row = await conn.fetchrow(
+            f"""
+            UPDATE contacts SET {', '.join(parts)}, updated_at = now()
+            WHERE id = ${len(params)}
+            RETURNING id, name, phone, email, address
+            """,
+            *params,
+        )
+        return PortalProfile(**dict(row))
