@@ -151,7 +151,23 @@ function AiToolsScreen() {
 
   return (
     <>
-      <h1 className="mb-1 text-xl font-bold">أدوات الذكاء للمستندات</h1>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h1 className="text-xl font-bold">أدوات الذكاء للمستندات</h1>
+        <div className="flex gap-2">
+          <Link
+            href="/ai-tools/contract-review"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            🔍 مراجعة العقد
+          </Link>
+          <Link
+            href="/ai-tools/knowledge-search"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            🔎 بحث قانوني
+          </Link>
+        </div>
+      </div>
       <p className="mb-4 text-xs text-gray-500">
         كل المخرجات تُنشأ كمسودة بانتظار المراجعة، مستندة إلى مصادرها، ومميَّزة بصريًا.
         هذا النظام أداة مساعدة للمحامين — المسؤولية المهنية تقع على عاتق المحامي.

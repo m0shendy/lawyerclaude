@@ -19,7 +19,7 @@ import re
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from app.api.ai_outputs import (
@@ -382,3 +382,70 @@ async def case_timeline(
         model=model_label,
     )
     return AiDocResponse(output=output)
+
+
+# ── GET /ai/knowledge-search (US11) ───────────────────────────────────────────
+
+CorpusFilter = Literal["all", "private", "shared"]
+
+
+class KnowledgeResult(BaseModel):
+    chunk_id: str
+    document_id: str
+    chunk_text: str
+    page_ref: int | None
+    similarity: float
+    corpus: str            # "private" | "shared"
+    # Shared-corpus results carry the persuasive-reference frame [C-IX]
+    frame: str | None      # "istishhad" when corpus == "shared", else None
+    type: str | None       # "persuasive_reference" when corpus == "shared"
+
+
+@router.get("/ai/knowledge-search", response_model=list[KnowledgeResult])
+async def knowledge_search(
+    conn: Db,
+    user: Annotated[CurrentUser, Depends(require_roles(MANAGER, LAWYER, PARALEGAL))],
+    q: str = Query(..., min_length=3, description="Natural language search query"),
+    corpus: CorpusFilter = Query("all"),
+    case_id: UUID | None = Query(default=None),
+) -> list[KnowledgeResult]:
+    """Embed the query and pgvector-search the requested corpus/corpora.
+
+    No ai_outputs row is created — this is a read-only retrieval operation.
+    Results from the shared Egyptian-law corpus receive:
+    - ``type = "persuasive_reference"``
+    - ``frame = "istishhad"``
+    to make their non-binding status explicit to the UI. [C-IX]
+    """
+    _, cfg, emb_cfg, _ = await _load_llm(conn)
+    api_key = (await conn.fetchval("SELECT llm_api_key FROM firm_settings LIMIT 1")) or ""
+
+    chunks = await retrieve(
+        query=q,
+        conn=conn,
+        api_key=api_key,
+        embedding_config=emb_cfg,
+        case_id=case_id,
+        include_shared=(corpus in ("all", "shared")),
+    )
+
+    # Filter to requested corpus if not "all"
+    if corpus == "shared":
+        chunks = [c for c in chunks if c.corpus == "shared"]
+    elif corpus == "private":
+        chunks = [c for c in chunks if c.corpus == "private"]
+
+    return [
+        KnowledgeResult(
+            chunk_id=str(c.chunk_id),
+            document_id=str(c.document_id),
+            chunk_text=c.chunk_text,
+            page_ref=c.page_ref,
+            similarity=round(c.similarity, 4),
+            corpus=c.corpus,
+            # Shared results are persuasive references — not binding [C-IX]
+            type="persuasive_reference" if c.corpus == "shared" else None,
+            frame="istishhad" if c.corpus == "shared" else None,
+        )
+        for c in chunks
+    ]
