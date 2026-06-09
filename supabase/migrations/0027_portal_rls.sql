@@ -24,7 +24,7 @@ CREATE POLICY cases_portal_client ON cases
         )
     );
 
--- documents: client sees only non-confidential shared documents
+-- documents: client sees only portal_visible + non-confidential docs linked to their cases
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS documents_portal_client ON documents;
 CREATE POLICY documents_portal_client ON documents
@@ -32,14 +32,18 @@ CREATE POLICY documents_portal_client ON documents
     USING (
         (current_setting('request.jwt.claims', true)::json->>'role') != 'client'
         OR
-        id IN (
-            SELECT ds.document_id FROM document_sharing ds
-            JOIN contacts c ON c.id = ds.shared_with_contact_id
-            WHERE c.portal_user_id = auth.uid()
+        (
+            portal_visible = true
+            AND is_confidential = false
+            AND case_id IN (
+                SELECT cc.case_id FROM case_contacts cc
+                JOIN contacts c ON c.id = cc.contact_id
+                WHERE c.portal_user_id = auth.uid()
+            )
         )
     );
 
--- invoices: client sees own invoices via contact join
+-- invoices: client sees own invoices via contact_id
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS invoices_portal_client ON invoices;
 CREATE POLICY invoices_portal_client ON invoices
@@ -47,12 +51,12 @@ CREATE POLICY invoices_portal_client ON invoices
     USING (
         (current_setting('request.jwt.claims', true)::json->>'role') != 'client'
         OR
-        client_contact_id IN (
+        contact_id IN (
             SELECT id FROM contacts WHERE portal_user_id = auth.uid()
         )
     );
 
--- appointments: client sees own appointments
+-- appointments: client sees own appointments via contact_id
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS appointments_portal_client ON appointments;
 CREATE POLICY appointments_portal_client ON appointments
@@ -60,7 +64,7 @@ CREATE POLICY appointments_portal_client ON appointments
     USING (
         (current_setting('request.jwt.claims', true)::json->>'role') != 'client'
         OR
-        client_contact_id IN (
+        contact_id IN (
             SELECT id FROM contacts WHERE portal_user_id = auth.uid()
         )
     );

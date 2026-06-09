@@ -18,7 +18,6 @@ export interface Folder {
 
 interface FolderNodeProps {
   folder: Folder
-  children: Folder[]
   allFolders: Folder[]
   selected: string | null
   onSelect: (id: string) => void
@@ -27,14 +26,14 @@ interface FolderNodeProps {
 }
 
 function FolderNode({
-  folder, children, allFolders, selected, onSelect, onCreated, depth = 0,
+  folder, allFolders, selected, onSelect, onCreated, depth = 0,
 }: FolderNodeProps) {
   const [open, setOpen] = useState(true)
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const subFolders = children.filter(f => f.parent_folder_id === folder.id)
+  const subFolders = allFolders.filter(f => f.parent_folder_id === folder.id)
 
   async function createSub() {
     if (!newName.trim()) return
@@ -108,7 +107,6 @@ function FolderNode({
             <FolderNode
               key={sub.id}
               folder={sub}
-              children={allFolders.filter(f => f.parent_folder_id === sub.id)}
               allFolders={allFolders}
               selected={selected}
               onSelect={onSelect}
@@ -206,7 +204,6 @@ export default function FolderTree({ caseId, selected, onSelect }: FolderTreePro
           <FolderNode
             key={folder.id}
             folder={folder}
-            children={folders.filter(f => f.parent_folder_id === folder.id)}
             allFolders={folders}
             selected={selected}
             onSelect={onSelect}
