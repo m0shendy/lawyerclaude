@@ -152,6 +152,7 @@ async def _resolve_active_user(conn, phone_digits: str) -> CurrentUser | None:
                role::text AS role, status::text AS status
         FROM users
         WHERE regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = $1
+        ORDER BY created_at DESC
         LIMIT 1
         """,
         phone_digits,
@@ -169,11 +170,17 @@ async def whatsapp_webhook(
     """Inbound WAHA webhook for the conversational assistant. [C-I][C-II][C-V]
 
     Unregistered/inactive senders get a polite refusal and **zero** case content.
-    Registered senders get a grounded, scoped answer delivered back over WhatsApp.
+    Registered senders: AI answer is saved as draft_unreviewed — the sender
+    receives only an acknowledgment; the actual answer is blocked until a
+    lawyer/partner approves it in the review queue. [C-II]
     Runs in a system (BYPASSRLS) context; scoping is enforced in code.
     """
     settings = get_settings()
-    if settings.waha_webhook_token and x_webhook_token != settings.waha_webhook_token:
+    # Webhook token is MANDATORY. If not configured the endpoint is inoperable
+    # — callers get 503 so operators know to set WAHA_WEBHOOK_TOKEN. [C-I]
+    if not settings.waha_webhook_token:
+        raise ApiError(503, "misconfigured", "WAHA_WEBHOOK_TOKEN غير مُعيَّن — الخدمة غير مفعَّلة")
+    if x_webhook_token != settings.waha_webhook_token:
         raise ApiError(401, "unauthorized", "رمز التحقق غير صالح")
 
     # WAHA "message" event shape: {event, session, payload:{from, body, fromMe}}
@@ -240,8 +247,32 @@ async def whatsapp_webhook(
             await _reply("تعذّر توليد الإجابة حالياً، حاول لاحقاً.")
             return {"status": "error"}
 
-        await _reply(answer)
-        return {"status": "answered", "user_id": str(user.id)}
+        # [C-II] NEVER send the AI answer directly to WhatsApp.
+        # Save it as draft_unreviewed; the lawyer reviews and approves it in the
+        # dashboard before any official content reaches the client.
+        sources = [
+            SourceLink(
+                chunk_id=c.chunk_id,
+                document_id=c.document_id,
+                page_ref=c.page_ref,
+            )
+            for c in chunks
+        ]
+        output_id = await _save_as_draft(
+            conn,
+            case_id=None,
+            query=text,
+            answer=answer,
+            sources=sources,
+            model=model,
+        )
+        logger.info("whatsapp_webhook: saved draft output=%s for user=%s", output_id, user.id)
+
+        # Send only an acknowledgment — no AI content over the channel. [C-II]
+        await _reply(
+            "تم استلام سؤالك. سيراجع المحامي الإجابة ويردّ عليك قريبًا عبر القناة الرسمية."
+        )
+        return {"status": "queued_for_review", "output_id": str(output_id), "user_id": str(user.id)}
 
 
 async def _save_as_draft(

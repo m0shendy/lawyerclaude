@@ -106,7 +106,7 @@ function ReferencesScreen() {
                     <span className="text-gray-400">صفحة {m.page_ref}</span>
                   )}
                   <span className="ms-auto text-gray-400" dir="ltr">
-                    {Math.round(m.similarity * 100)}%
+                    {Math.round(Math.max(0, Math.min(1, m.similarity)) * 100)}%
                   </span>
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">

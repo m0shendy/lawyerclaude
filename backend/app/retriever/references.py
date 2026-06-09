@@ -94,7 +94,8 @@ async def _search_private_references(
     rows = await conn.fetch(
         """
         SELECT rc.id AS chunk_id, rp.id AS document_id, rc.chunk_text, rc.page_ref,
-               rc.source_location, 1 - (rc.embedding <=> $1::vector) AS similarity
+               rc.source_location,
+               GREATEST(0.0, LEAST(1.0, 1 - (rc.embedding <=> $1::vector))) AS similarity
         FROM reference_chunks rc
         JOIN references_private rp ON rp.id = rc.reference_id
         ORDER BY rc.embedding <=> $1::vector
