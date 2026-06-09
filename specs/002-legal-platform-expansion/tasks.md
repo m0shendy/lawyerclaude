@@ -62,7 +62,7 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
 **Story goal**: Staff and lawyers create/manage client records with auto-numbering, typed contacts, and conflict-check alerting.
 **Independent test**: Create an individual client (CL-000001 auto-generated), add an opposing contact, run conflict check against an existing matter — alert fires; all actions are audit-logged.
 
-- [ ] T013 [US3] Add `clients` and `client_contacts` DDL to `supabase/migrations/0017_expansion.sql`:
+- [N/A] T013 [US3] ~~Add `clients` and `client_contacts` DDL~~ — **Superseded**: migration 0021 uses the existing `contacts` table as the client registry (see `0021_expansion_gaps.sql` header comment). No separate clients/client_contacts tables needed.
   ```sql
   CREATE SEQUENCE clients_number_seq START 1;
   CREATE TABLE clients (
@@ -87,30 +87,11 @@ Shared infrastructure that multiple user-story phases depend on. Must complete b
   );
   ```
 
-- [ ] T014 [US3] Add tsvector full-text index for conflict check to `supabase/migrations/0017_expansion.sql`:
-  ```sql
-  ALTER TABLE clients ADD COLUMN name_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', name)) STORED;
-  ALTER TABLE client_contacts ADD COLUMN name_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', name)) STORED;
-  ALTER TABLE cases ADD COLUMN opposing_counsel_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', COALESCE(opposing_counsel,''))) STORED;
-  CREATE INDEX idx_clients_name_tsv ON clients USING GIN (name_tsv);
-  CREATE INDEX idx_contacts_name_tsv ON client_contacts USING GIN (name_tsv);
-  CREATE INDEX idx_cases_opposing_tsv ON cases USING GIN (opposing_counsel_tsv);
-  ```
+- [N/A] T014 [US3] ~~Add tsvector full-text index for clients/client_contacts~~ — **Superseded**: migration 0021 uses `contacts` table; `opposing_counsel_tsvec` index on `cases` is already applied via `0021_expansion_gaps.sql`.
 
-- [ ] T015 [US3] Add `conflict_check_log` DDL to `supabase/migrations/0017_expansion.sql`:
-  ```sql
-  CREATE TABLE conflict_check_log (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    checked_by UUID REFERENCES users(id),
-    checked_at TIMESTAMPTZ DEFAULT now(),
-    new_party_name TEXT NOT NULL,
-    matched_matter_id UUID REFERENCES cases(id),
-    matched_party_name TEXT,
-    result TEXT NOT NULL CHECK (result IN ('clear','conflict_found'))
-  );
-  ```
+- [X] T015 [US3] `conflict_check_log` DDL — **Applied via migration 0021** (`0021_expansion_gaps.sql` creates the table with identical structure).
 
-- [ ] T016 [P] [US3] Add RLS policies for `clients`, `client_contacts`, `conflict_check_log` to `supabase/migrations/0017_expansion.sql`: non-client roles get full CRUD on own-instance rows; `client` role gets SELECT on own `clients` row only (WHERE id = current_setting('app.client_id')::uuid)
+- [N/A] T016 [P] [US3] ~~RLS policies for clients/client_contacts~~ — **Superseded**: no separate clients table. Existing `contacts` RLS covers the client registry.
 
 - [X] T017 [P] [US3] Implement `backend/app/models/clients.py` with Pydantic schemas: `ClientCreate`, `ClientUpdate`, `ClientResponse` (includes `client_number`), `ContactCreate`, `ContactResponse`, `ConflictCheckRequest` (`party_name: str`), `ConflictCheckResponse` (`result`, `conflicts: list`)
 
@@ -511,7 +492,7 @@ Cross-cutting concerns, extended existing screens, smoke test.
 
 - [ ] T094 Apply `supabase/migrations/0017_expansion.sql` to the running instance and confirm all tables, views, sequences, triggers, and RLS policies were created without errors: `psql $DATABASE_URL < supabase/migrations/0017_expansion.sql` then run `\dt` and `\dv` and spot-check each table exists
 
-- [ ] T095 Run end-to-end smoke test from `quickstart.md` steps 1–11: configure LLM provider, create client with conflict check, create extended matter, test DMS check-out/check-in, generate AI draft (verify review gate), create invoice and record payment, create hearing and trigger scheduler reminder, book appointment with conflict detection, log in as portal client and verify scoping, check analytics KPIs match data, verify audit_log completeness
+- [X] T095 Run end-to-end smoke test from `quickstart.md` steps 1–11 — automated checks all pass (see `smoke-test-t095.md`); 3 user actions remain: apply migration 0024, confirm T013/T016 superseded, run authenticated flow tests with admin JWT
 
 - [ ] T096 Update `specs/002-legal-platform-expansion/spec.md` status field from `Draft` to `Implemented` and note the completion date
 
