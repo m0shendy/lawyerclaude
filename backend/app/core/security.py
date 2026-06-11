@@ -28,6 +28,7 @@ _bearer = HTTPBearer(auto_error=False)
 class CurrentUser(BaseModel):
     id: UUID
     auth_user_id: UUID
+    firm_id: UUID
     full_name: str
     email: str
     phone: str | None
@@ -58,7 +59,7 @@ async def load_user_by_auth_id(auth_user_id: str) -> CurrentUser:
     async with db_connection(None, "auth:resolve") as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, auth_user_id, full_name, email, phone, role::text AS role, status::text AS status
+            SELECT id, auth_user_id, firm_id, full_name, email, phone, role::text AS role, status::text AS status
             FROM users
             WHERE auth_user_id = $1
             """,
