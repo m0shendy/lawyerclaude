@@ -1,20 +1,30 @@
 """Authentication (T020).
 
-Verifies the Supabase GoTrue JWT (HS256) from `Authorization: Bearer` and
-resolves the per-instance `users` row (profile + role). Only `active` users
-authenticate — inactive users are rejected everywhere, including the
-assistant channel (R12). Per-firm isolation is the instance boundary: this
-backend only ever sees its own firm's GoTrue + users table. [C-I]
+Verifies the Supabase GoTrue JWT from `Authorization: Bearer` and resolves
+the `users` row (profile + role). Supports both signing schemes:
+
+* **HS256** — legacy shared secret (`GOTRUE_JWT_SECRET`), used by self-hosted
+  GoTrue stacks and by tests that mint their own tokens.
+* **ES256/RS256** — asymmetric signing keys used by Supabase Cloud projects;
+  the public key is fetched (and cached) from the project's JWKS endpoint
+  (`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`).
+
+Only `active` users authenticate — inactive users are rejected everywhere,
+including the assistant channel (R12). Tenant isolation is enforced via the
+`firm_id` carried on the resolved user row. [C-I]
 """
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Annotated, Literal
 from uuid import UUID
 
 import jwt
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientError
 from pydantic import BaseModel
 
 from app.core.config import get_settings
@@ -36,18 +46,44 @@ class CurrentUser(BaseModel):
     status: str
 
 
+@lru_cache
+def _jwks_client() -> PyJWKClient:
+    """JWKS client for asymmetric (Supabase Cloud) token verification, cached."""
+    settings = get_settings()
+    return PyJWKClient(
+        f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json",
+        cache_keys=True,
+        lifespan=3600,
+    )
+
+
 def _decode_token(token: str) -> dict:
     settings = get_settings()
-    if not settings.gotrue_jwt_secret:
-        raise ApiError(500, "misconfigured", "GOTRUE_JWT_SECRET is not configured")
     try:
+        header = jwt.get_unverified_header(token)
+    except jwt.InvalidTokenError as exc:
+        raise ApiError(401, "invalid_token", "جلسة غير صالحة — يرجى تسجيل الدخول") from exc
+
+    try:
+        if header.get("alg") == "HS256":
+            # Legacy shared-secret signing (self-hosted GoTrue, tests).
+            if not settings.gotrue_jwt_secret:
+                raise ApiError(500, "misconfigured", "GOTRUE_JWT_SECRET is not configured")
+            return jwt.decode(
+                token,
+                settings.gotrue_jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+        # Asymmetric signing (Supabase Cloud) — verify against the project JWKS.
+        signing_key = _jwks_client().get_signing_key_from_jwt(token)
         return jwt.decode(
             token,
-            settings.gotrue_jwt_secret,
-            algorithms=["HS256"],
+            signing_key.key,
+            algorithms=["ES256", "RS256"],
             audience="authenticated",
         )
-    except jwt.InvalidTokenError as exc:
+    except (jwt.InvalidTokenError, PyJWKClientError) as exc:
         raise ApiError(401, "invalid_token", "جلسة غير صالحة — يرجى تسجيل الدخول") from exc
 
 
