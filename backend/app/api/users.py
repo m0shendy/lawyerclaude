@@ -140,8 +140,8 @@ async def create_user(
     try:
         row = await conn.fetchrow(
             f"""
-            INSERT INTO users (auth_user_id, full_name, email, phone, role)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO users (firm_id, auth_user_id, full_name, email, phone, role)
+            VALUES ($6, $1, $2, $3, $4, $5)
             RETURNING {_USER_COLUMNS}
             """,
             UUID(auth_user_id),
@@ -149,6 +149,7 @@ async def create_user(
             body.email,
             body.phone,
             body.role,
+            _manager.firm_id,
         )
     except Exception:
         await _gotrue_delete(UUID(auth_user_id))

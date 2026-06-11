@@ -103,9 +103,9 @@ async def create_deadline(
     row = await conn.fetchrow(
         f"""
         INSERT INTO deadlines
-            (case_id, type, title, basis, due_date, confirmed,
+            (firm_id, case_id, type, title, basis, due_date, confirmed,
              responsible_user_id, low_confidence_flag)
-        VALUES ($1, 'general', $2, $3, $4, true, $5, false)
+        VALUES ($6, $1, 'general', $2, $3, $4, true, $5, false)
         RETURNING {_DEADLINE_COLS}
         """,
         case_id,
@@ -113,6 +113,7 @@ async def create_deadline(
         body.basis,
         body.due_date,
         body.responsible_user_id,
+        user.firm_id,
     )
     return _row(row)
 

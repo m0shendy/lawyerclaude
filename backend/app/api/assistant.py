@@ -148,15 +148,16 @@ async def _save_as_draft(
     output_id = await conn.fetchval(
         """
         INSERT INTO ai_outputs
-            (document_id, case_id, type, content, source_links,
+            (firm_id, document_id, case_id, type, content, source_links,
              review_state, low_confidence_flag, generated_by_model)
-        VALUES (NULL, $1, 'analysis', $2, $3, 'draft_unreviewed', false, $4)
+        VALUES ($5, NULL, $1, 'analysis', $2, $3, 'draft_unreviewed', false, $4)
         RETURNING id
         """,
         case_id,
         json.dumps(content, ensure_ascii=False),
         json.dumps(source_links, ensure_ascii=False),
         model,
+        user.firm_id,
     )
     logger.info("assistant: saved draft output=%s case=%s", output_id, case_id)
     return output_id

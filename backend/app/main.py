@@ -106,6 +106,7 @@ def create_app() -> FastAPI:
         documents,
         reports,
         settings,
+        signup,
         tasks,
         users,
     )
@@ -122,6 +123,7 @@ def create_app() -> FastAPI:
     app.include_router(assistant.router)
     app.include_router(settings.router)
     app.include_router(audit.router)
+    app.include_router(signup.router)
 
     return app
 

@@ -229,9 +229,9 @@ async def _store_chunks(conn, document_id: UUID, chunks, vectors: list[list[floa
         await conn.execute(
             """
             INSERT INTO document_chunks
-                (document_id, chunk_index, chunk_text, embedding, page_ref, source_location)
+                (firm_id, document_id, chunk_index, chunk_text, embedding, page_ref, source_location)
             VALUES
-                ($1, $2, $3, $4::vector, $5, $6)
+                ($7, $1, $2, $3, $4::vector, $5, $6)
             """,
             document_id,
             chunk.index,
@@ -239,6 +239,7 @@ async def _store_chunks(conn, document_id: UUID, chunks, vectors: list[list[floa
             vec_literal,
             chunk.page_ref,
             json.dumps({"page": chunk.page_ref, "char_start": chunk.char_start}),
+            row["firm_id"],
         )
 
 

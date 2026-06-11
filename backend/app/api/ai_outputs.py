@@ -442,9 +442,9 @@ async def _create_ai_output(
     row = await conn.fetchrow(
         f"""
         INSERT INTO ai_outputs
-            (document_id, case_id, type, content, source_links,
+            (firm_id, document_id, case_id, type, content, source_links,
              review_state, low_confidence_flag, generated_by_model)
-        VALUES ($1, $2, $3, $4, $5, 'draft_unreviewed', $6, $7)
+        VALUES ($8, $1, $2, $3, $4, $5, 'draft_unreviewed', $6, $7)
         RETURNING {_OUTPUT_COLUMNS}
         """,
         document_id,
@@ -454,6 +454,7 @@ async def _create_ai_output(
         json.dumps(source_links, ensure_ascii=False),
         low_confidence_flag,
         model,
+        user.firm_id,
     )
     return _row_to_output(row)
 

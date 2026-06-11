@@ -341,6 +341,24 @@ async def _dispatch(
 # ── orchestration ─────────────────────────────────────────────────────────────
 
 
+async def expire_trials(conn: asyncpg.Connection) -> int:
+    """Deterministic: suspend firms whose trial lapsed without a paid sub. [C-IV]"""
+    rows = await conn.fetch(
+        """
+        UPDATE firms f SET status = 'suspended'
+        WHERE f.status = 'trial' AND f.trial_ends_at < now()
+          AND NOT EXISTS (
+              SELECT 1 FROM subscriptions s
+              WHERE s.firm_id = f.id AND s.status = 'active'
+          )
+        RETURNING f.id
+        """
+    )
+    if rows:
+        logger.info("trials: suspended %d expired firm(s)", len(rows))
+    return len(rows)
+
+
 async def run_all_reminders(
     conn: asyncpg.Connection,
     *,
@@ -353,6 +371,8 @@ async def run_all_reminders(
     one firm's pass never block the next firm. [C-I v2][C-IV]
     """
     from app.core.tenancy import active_firm_ids
+
+    await expire_trials(conn)
 
     total = RunSummary()
     for firm_id in await active_firm_ids(conn):
