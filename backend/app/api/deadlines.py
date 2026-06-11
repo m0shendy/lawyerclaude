@@ -105,9 +105,9 @@ async def create_deadline(
     row = await conn.fetchrow(
         f"""
         INSERT INTO deadlines
-            (case_id, type, title, basis, due_date, confirmed,
+            (firm_id, case_id, type, title, basis, due_date, confirmed,
              responsible_user_id, low_confidence_flag)
-        VALUES ($1, 'general', $2, $3, $4, true, $5, false)
+        VALUES ($6, $1, 'general', $2, $3, $4, true, $5, false)
         RETURNING {_DEADLINE_COLS}
         """,
         case_id,
@@ -115,6 +115,7 @@ async def create_deadline(
         body.basis,
         body.due_date,
         body.responsible_user_id,
+        user.firm_id,
     )
     return _row(row)
 
@@ -267,7 +268,7 @@ async def confirm_deadline(
     The feature flag must be on.  After confirmation reminders will schedule.
     [C-X]
     """
-    await require_flag(conn, "feature_appeal_deadlines")
+    await require_flag(conn, "feature_appeal_deadlines", user.firm_id)
 
     existing = await _get_deadline_or_404(conn, deadline_id)
     await assert_case_access(conn, user, existing.case_id)

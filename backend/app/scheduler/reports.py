@@ -76,7 +76,10 @@ _ACTION_AR = {"create": "أُضيف", "update": "حُدّث", "delete": "حُذ�
 
 
 async def assemble_daily_report(
-    conn: asyncpg.Connection, *, now: datetime | None = None
+    conn: asyncpg.Connection,
+    *,
+    firm_id: UUID,
+    now: datetime | None = None,
 ) -> DailyReport:
     """Build today's report from audited data only. Pure selection — no LLM.
 
@@ -99,10 +102,10 @@ async def assemble_daily_report(
         SELECT a.id AS audit_id, a.action::text AS action, a.when_ts,
                c.title, c.client_name
         FROM audit_log a JOIN cases c ON c.id = a.record_id
-        WHERE a.entity_table = 'cases' AND a.when_ts >= $1 AND a.when_ts < $2
+        WHERE a.entity_table = 'cases' AND a.when_ts >= $1 AND a.when_ts < $2 AND a.firm_id = $3
         ORDER BY a.when_ts
         """,
-        start, end,
+        start, end, firm_id,
     ):
         report.what_happened.append(
             ReportItem(
@@ -122,10 +125,10 @@ async def assemble_daily_report(
         FROM audit_log a
         JOIN documents d ON d.id = a.record_id
         JOIN cases c ON c.id = d.case_id
-        WHERE a.entity_table = 'documents' AND a.when_ts >= $1 AND a.when_ts < $2
+        WHERE a.entity_table = 'documents' AND a.when_ts >= $1 AND a.when_ts < $2 AND a.firm_id = $3
         ORDER BY a.when_ts
         """,
-        start, end,
+        start, end, firm_id,
     ):
         report.what_happened.append(
             ReportItem(
@@ -146,10 +149,10 @@ async def assemble_daily_report(
         FROM audit_log a
         JOIN deadlines d ON d.id = a.record_id
         JOIN cases c ON c.id = d.case_id
-        WHERE a.entity_table = 'deadlines' AND a.when_ts >= $1 AND a.when_ts < $2
+        WHERE a.entity_table = 'deadlines' AND a.when_ts >= $1 AND a.when_ts < $2 AND a.firm_id = $3
         ORDER BY a.when_ts
         """,
-        start, end,
+        start, end, firm_id,
     ):
         report.what_happened.append(
             ReportItem(
@@ -170,10 +173,10 @@ async def assemble_daily_report(
         FROM audit_log a
         JOIN tasks t ON t.id = a.record_id
         JOIN cases c ON c.id = t.case_id
-        WHERE a.entity_table = 'tasks' AND a.when_ts >= $1 AND a.when_ts < $2
+        WHERE a.entity_table = 'tasks' AND a.when_ts >= $1 AND a.when_ts < $2 AND a.firm_id = $3
         ORDER BY a.when_ts
         """,
-        start, end,
+        start, end, firm_id,
     ):
         report.what_happened.append(
             ReportItem(
@@ -192,10 +195,10 @@ async def assemble_daily_report(
         SELECT a.id AS audit_id, a.action::text AS action, a.when_ts,
                o.type::text AS type, o.review_state::text AS review_state
         FROM audit_log a JOIN ai_outputs o ON o.id = a.record_id
-        WHERE a.entity_table = 'ai_outputs' AND a.when_ts >= $1 AND a.when_ts < $2
+        WHERE a.entity_table = 'ai_outputs' AND a.when_ts >= $1 AND a.when_ts < $2 AND a.firm_id = $3
         ORDER BY a.when_ts
         """,
-        start, end,
+        start, end, firm_id,
     ):
         verb = (
             "اعتُمد"
@@ -222,10 +225,10 @@ async def assemble_daily_report(
         FROM deadlines d
         JOIN cases c ON c.id = d.case_id
         JOIN users u ON u.id = d.responsible_user_id
-        WHERE d.confirmed = true AND d.due_date = $1
+        WHERE d.confirmed = true AND d.due_date = $1 AND d.firm_id = $2
         ORDER BY c.title
         """,
-        tomorrow,
+        tomorrow, firm_id,
     ):
         report.tomorrow.append(
             ReportItem(
@@ -245,10 +248,10 @@ async def assemble_daily_report(
         FROM tasks t
         JOIN cases c ON c.id = t.case_id
         JOIN users u ON u.id = t.assigned_to
-        WHERE t.status IN ('open', 'in_progress') AND t.due_date = $1
+        WHERE t.status IN ('open', 'in_progress') AND t.due_date = $1 AND t.firm_id = $2
         ORDER BY c.title
         """,
-        tomorrow,
+        tomorrow, firm_id,
     ):
         report.tomorrow.append(
             ReportItem(
@@ -320,6 +323,7 @@ _HEADING_TOMORROW = "مهام الغد"
 async def generate_and_send_daily_reports(
     conn: asyncpg.Connection,
     *,
+    firm_id: UUID,
     now: datetime | None = None,
     send: Sender | None = None,
 ) -> dict[str, int]:
@@ -334,10 +338,12 @@ async def generate_and_send_daily_reports(
 
         send = send_text
 
-    report = await assemble_daily_report(conn, now=now)
+    report = await assemble_daily_report(conn, firm_id=firm_id, now=now)
 
     firm = await conn.fetchrow(
-        "SELECT waha_url, waha_key, llm_api_key, embedding_config FROM firm_settings LIMIT 1"
+        "SELECT waha_url, waha_key, llm_api_key, embedding_config "
+        "FROM firm_settings WHERE firm_id = $1",
+        firm_id,
     )
     api_key = firm["llm_api_key"] if firm else None
     model = _model_from_firm(firm)
@@ -351,7 +357,8 @@ async def generate_and_send_daily_reports(
 
     managers = await conn.fetch(
         "SELECT id, phone, status FROM users "
-        "WHERE role = 'partner_manager' AND status = 'active'"
+        "WHERE role = 'partner_manager' AND status = 'active' AND firm_id = $1",
+        firm_id,
     )
 
     from app.scheduler.waha import WahaError
@@ -436,3 +443,25 @@ def _waha_session() -> str:
     from app.core.config import get_settings
 
     return get_settings().waha_session
+
+
+async def run_all_reports(
+    conn: asyncpg.Connection,
+    *,
+    now: datetime | None = None,
+    send=None,
+) -> dict[str, int]:
+    """Multi-tenant orchestrator: daily reports for every eligible firm. [C-I v2]"""
+    from app.core.tenancy import active_firm_ids
+
+    total = {"sent": 0, "failed": 0, "skipped": 0}
+    for firm_id in await active_firm_ids(conn):
+        try:
+            counts = await generate_and_send_daily_reports(
+                conn, firm_id=firm_id, now=now, send=send
+            )
+            for k in total:
+                total[k] += counts.get(k, 0)
+        except Exception:
+            logger.exception("reports: firm %s pass failed — continuing", firm_id)
+    return total

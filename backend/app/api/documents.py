@@ -123,8 +123,8 @@ async def upload_document(
 
     row = await conn.fetchrow(
         f"""
-        INSERT INTO documents (case_id, file_path, file_name, source_type, status, uploaded_by)
-        VALUES ($1, $2, $3, $4, 'pending', $5)
+        INSERT INTO documents (firm_id, case_id, file_path, file_name, source_type, status, uploaded_by)
+        VALUES ($6, $1, $2, $3, $4, 'pending', $5)
         RETURNING {_DOCUMENT_COLUMNS}
         """,
         case_id,
@@ -132,6 +132,7 @@ async def upload_document(
         file.filename or "document",
         source_type,
         user.id,
+        user.firm_id,
     )
     return _row_to_document(row)
 

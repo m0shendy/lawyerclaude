@@ -62,7 +62,7 @@ async def process_document(document_id: UUID) -> None:
         # ── 1. load the document row ──────────────────────────────────────────
         row = await conn.fetchrow(
             """
-            SELECT id, case_id, file_path, file_name, source_type, status,
+            SELECT id, firm_id, case_id, file_path, file_name, source_type, status,
                    uploaded_by
             FROM documents
             WHERE id = $1
@@ -167,7 +167,8 @@ async def _run_pipeline(conn, row, settings) -> None:
 
     # ── 9. read embedding config from firm_settings ───────────────────────────
     firm = await conn.fetchrow(
-        "SELECT llm_api_key, embedding_config FROM firm_settings LIMIT 1"
+        "SELECT llm_api_key, embedding_config FROM firm_settings WHERE firm_id = $1",
+        row["firm_id"],
     )
     if firm is None:
         await _fail(conn, document_id, "إعدادات المكتب غير موجودة")
@@ -228,9 +229,9 @@ async def _store_chunks(conn, document_id: UUID, chunks, vectors: list[list[floa
         await conn.execute(
             """
             INSERT INTO document_chunks
-                (document_id, chunk_index, chunk_text, embedding, page_ref, source_location)
+                (firm_id, document_id, chunk_index, chunk_text, embedding, page_ref, source_location)
             VALUES
-                ($1, $2, $3, $4::vector, $5, $6)
+                ($7, $1, $2, $3, $4::vector, $5, $6)
             """,
             document_id,
             chunk.index,
@@ -238,6 +239,7 @@ async def _store_chunks(conn, document_id: UUID, chunks, vectors: list[list[floa
             vec_literal,
             chunk.page_ref,
             json.dumps({"page": chunk.page_ref, "char_start": chunk.char_start}),
+            row["firm_id"],
         )
 
 

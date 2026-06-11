@@ -117,6 +117,7 @@ def create_app() -> FastAPI:
         references,
         reports,
         settings,
+        signup,
         tasks,
         templates,
         users,
@@ -136,6 +137,7 @@ def create_app() -> FastAPI:
     app.include_router(references.router)
     app.include_router(settings.router)
     app.include_router(audit.router)
+    app.include_router(signup.router)
 
     # Expansion modules (Phase 14–21)
     app.include_router(contacts.router,      tags=["contacts"])

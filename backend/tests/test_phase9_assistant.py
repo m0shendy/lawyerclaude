@@ -23,6 +23,7 @@ from app.retriever.scoped import accessible_case_ids, retrieve_scoped
 
 def _user(role: str, user_id=None) -> CurrentUser:
     return CurrentUser(
+        firm_id=uuid4(),
         id=user_id or uuid4(),
         auth_user_id=uuid4(),
         full_name="مستخدم",

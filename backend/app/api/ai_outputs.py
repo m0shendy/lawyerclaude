@@ -222,9 +222,9 @@ async def summarize_document(
     low_confidence_flag = doc_row["status"] == "low_confidence"  # [C-VII]
 
     # Read embedding config + API key from firm_settings.
-    firm = await conn.fetchrow(
-        "SELECT llm_api_key, embedding_config FROM firm_settings LIMIT 1"
-    )
+    from app.core.tenancy import get_firm_config
+
+    firm = await get_firm_config(user.firm_id, "llm_api_key", "embedding_config")
     if firm is None:
         raise ApiError(500, "config_error", "إعدادات المكتب غير موجودة")
 
@@ -577,9 +577,9 @@ async def _create_ai_output(
     row = await conn.fetchrow(
         f"""
         INSERT INTO ai_outputs
-            (document_id, case_id, type, content, source_links,
+            (firm_id, document_id, case_id, type, content, source_links,
              review_state, low_confidence_flag, generated_by_model)
-        VALUES ($1, $2, $3, $4, $5, 'draft_unreviewed', $6, $7)
+        VALUES ($8, $1, $2, $3, $4, $5, 'draft_unreviewed', $6, $7)
         RETURNING {_OUTPUT_COLUMNS}
         """,
         document_id,
@@ -589,6 +589,7 @@ async def _create_ai_output(
         json.dumps(source_links, ensure_ascii=False),
         low_confidence_flag,
         model,
+        user.firm_id,
     )
     return _row_to_output(row)
 

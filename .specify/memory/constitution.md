@@ -1,8 +1,11 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (none) → 1.0.0
-Rationale: Initial ratification of the project constitution. No prior version existed;
+Version change: 1.0.0 → 2.0.0
+Rationale: SaaS conversion (owner decision, 2026-06): Principle I changes from per-firm
+physical instances to fail-closed RLS multi-tenancy on a shared Supabase Cloud project;
+Principle XII permits managed Supabase. All other principles unchanged. Prior:
+Initial ratification of the project constitution. No prior version existed;
            created from 12 user-supplied inviolable principles. MAJOR baseline = 1.0.0.
 
 Modified principles: N/A (initial adoption)
@@ -46,18 +49,27 @@ surfaced to the human owner rather than silently complied with.
 
 ## Core Principles
 
-### I. Per-Firm Physical Isolation
+### I. Per-Firm Tenant Isolation (Fail-Closed RLS) — amended v2.0.0
 
-Each law firm MUST receive its own fully isolated instance: its own Docker stack, its own
-database, its own auth, and its own storage. Firms MUST NEVER share a database. Cross-firm
-isolation is the **instance boundary** — a verifiable server/container boundary, not a
-code-level filter. Inside a single firm's instance, role-based access (`partner_manager`,
-`lawyer`, `paralegal`, `secretary`) MUST be enforced.
+The product is a single multi-tenant SaaS deployment: one application stack, one Postgres.
+Cross-firm isolation MUST be enforced in SQL by Row Level Security: every tenant table
+carries `firm_id`, and every RLS policy requires `rls_same_firm(firm_id)` BEFORE any role
+logic. The firm context (`app.firm_id` GUC) is set from the authenticated user's profile —
+never from client input. Isolation MUST be **fail-closed**: with no firm context set, every
+tenant table returns zero rows and rejects writes. No query path may read or write tenant
+data without the firm context. SECURITY DEFINER functions used by policies MUST repeat the
+firm check explicitly (they bypass RLS). Inside a firm, role-based access
+(`partner_manager`, `lawyer`, `paralegal`, `secretary`) MUST be enforced as before.
 
-**Rationale:** Physical isolation is auditable by a sysadmin without reviewing application
-code, and a misconfigured query can never leak one firm's confidential case data into
-another's. Role-based access (RLS) is scoped to *within* an instance, never as the
-cross-tenant boundary.
+An adversarial cross-tenant isolation test suite (two seeded firms; own-data visible;
+cross-firm zero on every tenant table including RAG chunk retrieval and audit_log; no-GUC
+fail-closed) MUST pass against a real Postgres before any release.
+
+**Rationale:** RLS-at-the-database is a single enforcement point below all application
+code — a buggy query cannot cross firms because the database refuses, and fail-closed means
+a forgotten firm context exposes nothing rather than everything. A future Enterprise tier
+MAY offer dedicated instances (the v1 physical model, retained in `infra/legacy/`) as a
+premium option; that option supplements, never replaces, RLS correctness.
 
 ### II. Mandatory Human Review Gate
 
@@ -151,14 +163,16 @@ restore (not merely taken).
 **Rationale:** Confidential legal data demands a hardened baseline; default secrets allow
 token forgery and an untested backup is not a backup.
 
-### XII. Stack Constraint
+### XII. Stack Constraint — amended v2.0.0
 
-The data layer MUST use PostgreSQL + pgvector via self-hosted Supabase. MS SQL Server MUST NOT
-be used. Authentication MUST NOT be split to a separate cloud service while data is
-self-hosted.
+The data layer MUST use PostgreSQL + pgvector via Supabase (managed Supabase Cloud for the
+SaaS deployment; self-hosted remains permitted for a dedicated Enterprise instance). MS SQL
+Server MUST NOT be used. Auth (GoTrue), database, and storage MUST live in the SAME Supabase
+project so RLS role enforcement and the users ↔ auth linkage stay integrated.
 
-**Rationale:** pgvector is required for RAG; MS SQL Server breaks it. Splitting auth to the
-cloud while data is self-hosted breaks RLS-based role enforcement and instance integration.
+**Rationale:** pgvector is required for RAG; MS SQL Server breaks it. Keeping auth and data
+in one project preserves RLS-based enforcement; managed Postgres adds PITR backups and
+removes per-firm ops burden without changing the SQL security model.
 
 ## Non-Negotiable Operating Constraints
 

@@ -136,8 +136,8 @@ async def create_task(
 
     row = await conn.fetchrow(
         f"""
-        INSERT INTO tasks (case_id, assigned_to, description, due_date, status, priority)
-        VALUES ($1, $2, $3, $4, 'open', $5)
+        INSERT INTO tasks (firm_id, case_id, assigned_to, description, due_date, status, priority)
+        VALUES ($6, $1, $2, $3, $4, 'open', $5)
         RETURNING {_TASK_COLS}
         """,
         case_id,
@@ -145,6 +145,7 @@ async def create_task(
         body.description,
         body.due_date,
         body.priority,
+        user.firm_id,
     )
     return _row(row)
 

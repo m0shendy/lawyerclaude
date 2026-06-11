@@ -59,13 +59,20 @@ async def _set_audit_gucs(
     user: "CurrentUser | None",
     context: str | None,
 ) -> None:
-    """Stamp the connection with acting identity for the audit triggers. [C-III]"""
+    """Stamp the connection with acting identity for the audit triggers and RLS.
+
+    app.firm_id drives tenant isolation (0013): every RLS policy fails closed
+    when it is unset, so API connections MUST carry it. Workers that legitimately
+    span firms use the service pool (BYPASSRLS) and pass firm per-iteration. [C-I][C-III]
+    """
     await conn.execute(
         "SELECT set_config('app.user_id', $1, false),"
         "       set_config('app.user_role', $2, false),"
-        "       set_config('app.context', $3, false)",
+        "       set_config('app.firm_id', $3, false),"
+        "       set_config('app.context', $4, false)",
         str(user.id) if user else "",
         user.role if user else "",
+        str(user.firm_id) if user else "",
         context or "",
     )
 

@@ -4,8 +4,12 @@ Guidance for AI agents working in this repository.
 
 ## Project
 
-AI-assisted, **per-firm physically isolated** office-management system for Egyptian (civil-law)
-law firms. Arabic RTL dashboard over a Python AI engine, self-hosted Supabase per firm.
+AI-assisted, **multi-tenant SaaS** office-management system for Egyptian (civil-law)
+law firms (constitution v2). Arabic RTL dashboard over a Python AI engine; one Supabase Cloud
+project for all firms with **fail-closed RLS tenant isolation** (every tenant table carries
+`firm_id`; no firm context ⇒ zero rows). Firms sign up at `/signup` (14-day trial) and pay via
+Paymob. Deployment: `docs/SAAS_RUNBOOK.md`. The v1 per-firm stack lives in `infra/legacy/`
+for a future Enterprise dedicated-instance tier.
 
 ## Authoritative documents (read before changing anything)
 
@@ -30,9 +34,11 @@ law firms. Arabic RTL dashboard over a Python AI engine, self-hosted Supabase pe
 
 - **Frontend**: Next.js 14 + TypeScript, RTL-first Arabic.
 - **Backend / AI engine**: Python 3.12 + FastAPI (+ background worker entrypoints).
-- **Data/Auth/Storage/RAG**: self-hosted Supabase (Postgres + pgvector + GoTrue + Storage), one
-  stack per firm. **No MS SQL Server. No split cloud auth.**
-- **Infra**: Docker + docker-compose, Portainer, Traefik (wildcard DNS + Let's Encrypt TLS).
+- **Data/Auth/Storage/RAG**: Supabase Cloud (Postgres + pgvector + GoTrue + Storage), one
+  shared project, RLS tenant isolation keyed by `app.firm_id`. **No MS SQL Server. Auth and
+  data stay in the same Supabase project.**
+- **Infra**: API + workers on a container host; frontend on Vercel; WAHA Plus alongside
+  (per-firm session = firm slug). Per-firm Docker/Traefik stack retired to `infra/legacy/`.
 - **WhatsApp**: WAHA Plus (Sumopod), per-firm session = tenant id.
 - **OCR**: Google Document AI (live intake); Foxit Pro + direct extraction (shared corpus, once).
 - **LLM**: client-provided key (default rec. Gemini 3.1 Pro); embeddings separate/cheaper.

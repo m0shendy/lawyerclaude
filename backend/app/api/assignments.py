@@ -46,14 +46,15 @@ async def create_assignment(
         "SELECT EXISTS (SELECT 1 FROM case_assignments WHERE case_id = $1 AND user_id = $2)",
         case_id,
         body.user_id,
+        user.firm_id,
     )
     if already:
         raise ApiError(409, "already_assigned", "المستخدم مُسند بالفعل إلى هذه القضية")
 
     row = await conn.fetchrow(
         """
-        INSERT INTO case_assignments (case_id, user_id)
-        VALUES ($1, $2)
+        INSERT INTO case_assignments (firm_id, case_id, user_id)
+        VALUES ($3, $1, $2)
         RETURNING id, case_id, user_id, created_at
         """,
         case_id,

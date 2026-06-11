@@ -122,7 +122,8 @@ async def get_settings(
     conn: Db,
     _manager: Annotated[CurrentUser, ManagerDep],
 ) -> SettingsOut:
-    row = await conn.fetchrow(f"SELECT {_ALL_COLS} FROM firm_settings LIMIT 1")
+    row = await conn.fetchrow(f"SELECT {_ALL_COLS} FROM firm_settings WHERE firm_id = $1",
+        _manager.firm_id)
     if row is None:
         raise ApiError(404, "not_found", "إعدادات المكتب غير مُهيَّأة")
     return _row_to_out(row)
@@ -136,7 +137,8 @@ async def update_settings(
 ) -> SettingsOut:
     updates = body.model_dump(exclude_unset=True, exclude_none=True)
     if not updates:
-        row = await conn.fetchrow(f"SELECT {_ALL_COLS} FROM firm_settings LIMIT 1")
+        row = await conn.fetchrow(f"SELECT {_ALL_COLS} FROM firm_settings WHERE firm_id = $1",
+        _manager.firm_id)
         if row is None:
             raise ApiError(404, "not_found", "إعدادات المكتب غير مُهيَّأة")
         return _row_to_out(row)
@@ -165,11 +167,12 @@ async def update_settings(
         params.append(value)
         parts.append(f"{field} = ${len(params)}")
 
+    params.append(_manager.firm_id)
     row = await conn.fetchrow(
         f"""
         UPDATE firm_settings
         SET {", ".join(parts)}, updated_at = now()
-        WHERE singleton = true
+        WHERE firm_id = ${len(params)}
         RETURNING {_ALL_COLS}
         """,
         *params,

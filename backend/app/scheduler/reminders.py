@@ -341,23 +341,72 @@ async def _dispatch(
 # ── orchestration ─────────────────────────────────────────────────────────────
 
 
-async def run_reminders(
+async def expire_trials(conn: asyncpg.Connection) -> int:
+    """Deterministic: suspend firms whose trial lapsed without a paid sub. [C-IV]"""
+    rows = await conn.fetch(
+        """
+        UPDATE firms f SET status = 'suspended'
+        WHERE f.status = 'trial' AND f.trial_ends_at < now()
+          AND NOT EXISTS (
+              SELECT 1 FROM subscriptions s
+              WHERE s.firm_id = f.id AND s.status = 'active'
+          )
+        RETURNING f.id
+        """
+    )
+    if rows:
+        logger.info("trials: suspended %d expired firm(s)", len(rows))
+    return len(rows)
+
+
+async def run_all_reminders(
     conn: asyncpg.Connection,
     *,
     now: datetime | None = None,
     send: Sender = send_text,
 ) -> RunSummary:
-    """Run one deterministic reminder pass. Returns per-status counts.
+    """Multi-tenant orchestrator: one deterministic pass PER eligible firm.
+
+    Suspended/cancelled firms are skipped entirely (no reminders). Failures in
+    one firm's pass never block the next firm. [C-I v2][C-IV]
+    """
+    from app.core.tenancy import active_firm_ids
+
+    await expire_trials(conn)
+
+    total = RunSummary()
+    for firm_id in await active_firm_ids(conn):
+        try:
+            s = await run_reminders(conn, firm_id=firm_id, now=now, send=send)
+            total.sent += s.sent
+            total.failed += s.failed
+            total.skipped += s.skipped
+        except Exception:
+            logger.exception("reminders: firm %s pass failed — continuing", firm_id)
+    return total
+
+
+async def run_reminders(
+    conn: asyncpg.Connection,
+    *,
+    firm_id: UUID,
+    now: datetime | None = None,
+    send: Sender = send_text,
+) -> RunSummary:
+    """Run one deterministic reminder pass for ONE firm. Returns counts.
 
     The DB connection must come from a system context (worker, BYPASSRLS) so the
-    scheduler sees every firm row. ``send`` is injectable for tests.
+    scheduler sees every firm row; tenant scope is the explicit ``firm_id``
+    filter on every query below. ``send`` is injectable for tests. [C-I v2]
     """
     now = now or datetime.now(tz=FIRM_TZ)
     today = now.astimezone(FIRM_TZ).date()
     summary = RunSummary()
 
     settings_row = await conn.fetchrow(
-        "SELECT waha_url, waha_key, reminder_lead_points FROM firm_settings LIMIT 1"
+        "SELECT waha_url, waha_key, reminder_lead_points "
+        "FROM firm_settings WHERE firm_id = $1",
+        firm_id,
     )
     if settings_row is None:
         logger.warning("reminders: no firm_settings row — nothing to do")
@@ -372,7 +421,8 @@ async def run_reminders(
     # Active partner_managers receive escalations.
     partner_rows = await conn.fetch(
         "SELECT id, full_name, phone, status FROM users "
-        "WHERE role = 'partner_manager' AND status = 'active'"
+        "WHERE role = 'partner_manager' AND status = 'active' AND firm_id = $1",
+        firm_id,
     )
 
     # ── confirmed deadlines ──────────────────────────────────────────────────
@@ -385,8 +435,9 @@ async def run_reminders(
         FROM deadlines d
         JOIN cases c ON c.id = d.case_id
         JOIN users u ON u.id = d.responsible_user_id
-        WHERE d.confirmed = true
-        """
+        WHERE d.confirmed = true AND d.firm_id = $1
+        """,
+        firm_id,
     )
     for d in deadlines:
         due: date = d["due_date"]
@@ -449,7 +500,9 @@ async def run_reminders(
         JOIN cases c ON c.id = t.case_id
         JOIN users u ON u.id = t.assigned_to
         WHERE t.status IN ('open', 'in_progress') AND t.due_date IS NOT NULL
-        """
+              AND t.firm_id = $1
+        """,
+        firm_id,
     )
     for t in tasks:
         due = t["due_date"]

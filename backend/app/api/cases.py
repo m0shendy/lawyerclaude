@@ -108,10 +108,10 @@ async def create_case(
     async with conn.transaction():
         row = await conn.fetchrow(
             f"""
-            INSERT INTO cases (title, client_name, case_number, court, case_type, status,
+            INSERT INTO cases (firm_id, title, client_name, case_number, court, case_type, status,
                                practice_area, jurisdiction, opposing_counsel, docket_number,
                                tags, priority, stage, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            VALUES ($15, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING {_CASE_COLUMNS}
             """,
             body.title,
@@ -128,12 +128,14 @@ async def create_case(
             body.priority,
             body.stage,
             user.id,
+            user.firm_id,
         )
         if user.role == LAWYER:
             await conn.execute(
-                "INSERT INTO case_assignments (case_id, user_id) VALUES ($1, $2)",
+                "INSERT INTO case_assignments (firm_id, case_id, user_id) VALUES ($3, $1, $2)",
                 row["id"],
                 user.id,
+                user.firm_id,
             )
     return Case(**dict(row))
 

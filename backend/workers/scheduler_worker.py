@@ -39,7 +39,7 @@ from app.core.config import get_settings
 from app.core.db import close_pool, db_connection
 from app.scheduler.checkout_release import release_stale_checkouts
 from app.scheduler.hearing_reminders import run_hearing_reminders
-from app.scheduler.reminders import run_reminders
+from app.scheduler.reminders import run_all_reminders
 from app.scheduler.reports import generate_and_send_daily_reports
 
 logging.basicConfig(
@@ -56,7 +56,7 @@ async def _reminder_pass() -> None:
         # user=None → BYPASSRLS service pool; the scheduler legitimately sees all
         # rows. context tags the audit GUCs as a system action. [C-III]
         async with db_connection(None, context="worker:scheduler:reminders") as conn:
-            summary = await run_reminders(conn)
+            summary = await run_all_reminders(conn)
         logger.info("scheduler_worker: reminder pass %s", summary.as_dict())
 
         # Hearing reminders — same deterministic pass, separate table. [C-IV]
@@ -95,7 +95,7 @@ async def _report_pass() -> None:
     """One deterministic daily-report pass: assemble → phrase → send → log. [C-IV]"""
     try:
         async with db_connection(None, context="worker:scheduler:reports") as conn:
-            counts = await generate_and_send_daily_reports(conn)
+            counts = await run_all_reports(conn)
         logger.info("scheduler_worker: report pass %s", counts)
     except Exception:
         logger.exception("scheduler_worker: report pass failed")

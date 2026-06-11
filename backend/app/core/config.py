@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = "*"
 
+    # ── Paymob (Egypt billing) — WP-S3 ──
+    paymob_api_key: str = ""
+    paymob_integration_id: str = ""
+    paymob_iframe_id: str = ""
+    paymob_hmac_secret: str = ""  # SECRET: webhook verification [C-III]
+
 
 @lru_cache
 def get_settings() -> Settings:
