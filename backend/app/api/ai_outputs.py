@@ -220,9 +220,9 @@ async def summarize_document(
     low_confidence_flag = doc_row["status"] == "low_confidence"  # [C-VII]
 
     # Read embedding config + API key from firm_settings.
-    firm = await conn.fetchrow(
-        "SELECT llm_api_key, embedding_config FROM firm_settings LIMIT 1"
-    )
+    from app.core.tenancy import get_firm_config
+
+    firm = await get_firm_config(user.firm_id, "llm_api_key", "embedding_config")
     if firm is None:
         raise ApiError(500, "config_error", "إعدادات المكتب غير موجودة")
 

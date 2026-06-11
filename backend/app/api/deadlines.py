@@ -197,7 +197,7 @@ async def confirm_deadline(
     The feature flag must be on.  After confirmation reminders will schedule.
     [C-X]
     """
-    await require_flag(conn, "feature_appeal_deadlines")
+    await require_flag(conn, "feature_appeal_deadlines", user.firm_id)
 
     existing = await _get_deadline_or_404(conn, deadline_id)
     await assert_case_access(conn, user, existing.case_id)

@@ -70,9 +70,9 @@ async def assistant_query(
     if body.case_id is not None:
         await assert_case_access(conn, user, body.case_id)
 
-    firm = await conn.fetchrow(
-        "SELECT llm_api_key, embedding_config FROM firm_settings LIMIT 1"
-    )
+    from app.core.tenancy import get_firm_config
+
+    firm = await get_firm_config(user.firm_id, "llm_api_key", "embedding_config")
     if firm is None:
         raise ApiError(500, "config_error", "إعدادات المكتب غير موجودة")
     api_key: str = firm["llm_api_key"] or ""

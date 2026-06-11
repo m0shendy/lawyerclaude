@@ -23,6 +23,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from uuid import uuid4
+
+_FIRM = uuid4()
+
 from app.scheduler.reminders import (
     FIRM_TZ,
     LeadPoint,
@@ -232,13 +236,13 @@ async def test_run_reminders_sends_once_and_is_idempotent() -> None:
     conn = FakeConn(firm=_firm(), deadlines=[_deadline(responsible_id=lawyer, due=date(2026, 6, 12))])
     send, calls = _recording_sender()
 
-    s1 = await run_reminders(conn, now=_NOW, send=send)
+    s1 = await run_reminders(conn, firm_id=_FIRM, now=_NOW, send=send)
     assert s1.sent == 1 and len(calls) == 1
     assert conn.inserts[0]["status"] == "sent"
     assert conn.inserts[0]["lead_point"] == "3d"
 
     # Second pass: identical attempt already 'sent' → deduped, no new send/insert.
-    s2 = await run_reminders(conn, now=_NOW, send=send)
+    s2 = await run_reminders(conn, firm_id=_FIRM, now=_NOW, send=send)
     assert s2.duplicate == 1 and s2.sent == 0
     assert len(calls) == 1  # no second send
     assert len(conn.inserts) == 1  # no new row
@@ -252,7 +256,7 @@ async def test_run_reminders_skips_recipient_without_phone() -> None:
     )
     send, calls = _recording_sender()
 
-    summary = await run_reminders(conn, now=_NOW, send=send)
+    summary = await run_reminders(conn, firm_id=_FIRM, now=_NOW, send=send)
     assert summary.skipped == 1 and summary.sent == 0
     assert calls == []  # never attempted
     assert conn.inserts[0]["status"] == "skipped"  # but logged — never silently dropped
@@ -265,7 +269,7 @@ async def test_run_reminders_logs_failed_on_waha_error() -> None:
     async def failing_send(*, waha_url, waha_key, phone, text, session):
         raise WahaError("boom")
 
-    summary = await run_reminders(conn, now=_NOW, send=failing_send)
+    summary = await run_reminders(conn, firm_id=_FIRM, now=_NOW, send=failing_send)
     assert summary.failed == 1
     assert conn.inserts[0]["status"] == "failed"
     assert "boom" in conn.inserts[0]["error_detail"]
@@ -283,7 +287,7 @@ async def test_escalation_to_partner_when_unacknowledged() -> None:
     )
     send, calls = _recording_sender()
 
-    summary = await run_reminders(conn, now=now, send=send)
+    summary = await run_reminders(conn, firm_id=_FIRM, now=now, send=send)
     assert summary.sent == 2  # lawyer + partner
     escalations = [r for r in conn.inserts if r["is_escalation"]]
     assert len(escalations) == 1
@@ -301,7 +305,7 @@ async def test_no_escalation_when_acknowledged() -> None:
     )
     send, calls = _recording_sender()
 
-    summary = await run_reminders(conn, now=now, send=send)
+    summary = await run_reminders(conn, firm_id=_FIRM, now=now, send=send)
     assert summary.sent == 1  # lawyer only
     assert all(not r["is_escalation"] for r in conn.inserts)
 

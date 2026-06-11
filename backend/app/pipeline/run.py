@@ -62,7 +62,7 @@ async def process_document(document_id: UUID) -> None:
         # ── 1. load the document row ──────────────────────────────────────────
         row = await conn.fetchrow(
             """
-            SELECT id, case_id, file_path, file_name, source_type, status,
+            SELECT id, firm_id, case_id, file_path, file_name, source_type, status,
                    uploaded_by
             FROM documents
             WHERE id = $1
@@ -167,7 +167,8 @@ async def _run_pipeline(conn, row, settings) -> None:
 
     # ── 9. read embedding config from firm_settings ───────────────────────────
     firm = await conn.fetchrow(
-        "SELECT llm_api_key, embedding_config FROM firm_settings LIMIT 1"
+        "SELECT llm_api_key, embedding_config FROM firm_settings WHERE firm_id = $1",
+        row["firm_id"],
     )
     if firm is None:
         await _fail(conn, document_id, "إعدادات المكتب غير موجودة")

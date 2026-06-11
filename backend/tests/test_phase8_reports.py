@@ -21,6 +21,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from uuid import uuid4 as _uuid4
+
+_FIRM = _uuid4()
+
 from app.scheduler.reports import (
     FIRM_TZ,
     ReportItem,
@@ -82,7 +86,7 @@ def _tomorrow_task_row():
 
 async def test_what_happened_items_reconcile_to_audit_rows() -> None:
     conn = FakeConn(cases=[_case_audit_row(101), _case_audit_row(102)])
-    report = await assemble_daily_report(conn, now=_NOW)
+    report = await assemble_daily_report(conn, firm_id=_FIRM, now=_NOW)
 
     # Exactly the two audited events — nothing invented.
     assert len(report.what_happened) == 2
@@ -94,7 +98,7 @@ async def test_what_happened_items_reconcile_to_audit_rows() -> None:
 async def test_tomorrow_items_reference_live_rows() -> None:
     task_row = _tomorrow_task_row()
     conn = FakeConn(tomorrow_tasks=[task_row])
-    report = await assemble_daily_report(conn, now=_NOW)
+    report = await assemble_daily_report(conn, firm_id=_FIRM, now=_NOW)
 
     assert len(report.tomorrow) == 1
     item = report.tomorrow[0]
@@ -105,7 +109,7 @@ async def test_tomorrow_items_reference_live_rows() -> None:
 
 
 async def test_empty_day_yields_empty_report() -> None:
-    report = await assemble_daily_report(FakeConn(), now=_NOW)
+    report = await assemble_daily_report(FakeConn(), firm_id=_FIRM, now=_NOW)
     assert report.what_happened == []
     assert report.tomorrow == []
     assert report.report_date == date(2026, 6, 6)
