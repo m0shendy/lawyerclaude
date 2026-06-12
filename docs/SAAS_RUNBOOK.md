@@ -58,16 +58,25 @@ session mode.
 
 ## 4. Deploy order
 
-1. **API**: `uvicorn app.main:create_app --factory` behind the host's TLS.
-   Health: `GET /health`.
-2. **Workers**: `python -m workers.pipeline_worker` and
-   `python -m workers.scheduler_worker` (the scheduler also flips expired
-   trials to `suspended` in its daily pass).
-3. **Frontend**: Vercel, env `NEXT_PUBLIC_API_URL=https://api.<domain>`.
-4. **Paymob dashboard**: set the *Transaction processed callback* to
+Use `infra/docker-compose.yml` — it runs **only** frontend, backend, and workers.
+All Postgres/Auth/Storage lives on Supabase Cloud; nothing local is started.
+
+```bash
+# On the host (192.168.5.61):
+cd /opt/firms/lawyer
+# ensure infra/.env does not exist (env file lives at /opt/firms/lawyer/.env)
+docker compose -f infra/docker-compose.yml pull  # or build
+docker compose -f infra/docker-compose.yml up -d --build
+docker compose -f infra/docker-compose.yml ps    # all 4 services should be Up
+```
+
+Services started: `backend`, `worker-pipeline`, `worker-scheduler`, `frontend`.
+Health: `GET /health` on the backend should return `{"status":"ok"}`.
+
+1. **Paymob dashboard**: set the *Transaction processed callback* to
    `https://api.<domain>/billing/paymob-webhook`. Send one sandbox payment and
    confirm `billing_events` gets the txn row and the firm flips to `active`.
-5. **WAHA**: start WAHA Plus; for each paying firm create a session named by
+2. **WAHA**: start WAHA Plus; for each paying firm create a session named by
    the firm slug and store `waha_url`/`waha_key` in that firm's settings page.
 
 ## 5. Smoke test (every deploy)

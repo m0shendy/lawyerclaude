@@ -1,0 +1,108 @@
+# =============================================================================
+# SaaS deployment — single shared stack for all firms  [Constitution v2]
+# =============================================================================
+# Three services on one host: backend API, two background workers, frontend.
+# ALL Postgres/Auth/Storage runs on Supabase Cloud — nothing local.
+#
+# Public entrypoints (Cloudflare tunnel routes to host ports):
+#   https://<domain>         -> frontend  :3000
+#   https://api.<domain>     -> backend   :8000
+#
+# Networks:
+#   proxy  — external Docker network shared with the cloudflared container.
+#            frontend and backend join it so they are reachable by name.
+#            Create once on the host: docker network create proxy
+#
+# Usage:
+#   cp infra/.env.example infra/.env   # fill secrets
+#   docker compose -f infra/docker-compose.yml up -d --build
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # FastAPI — API server (serves firm users, admin console, billing webhooks)
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ../backend
+    image: lawyerclaude-backend
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:8000:8000"
+    env_file:
+      - ../.env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-credentials.json
+    volumes:
+      - ../secrets/google-credentials.json:/run/secrets/google-credentials.json:ro
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Pipeline worker — document ingestion (OCR → chunk → embed).  [C-VII]
+  # One instance only; scale by increasing concurrency inside the worker.
+  # ---------------------------------------------------------------------------
+  worker-pipeline:
+    build:
+      context: ../backend
+    image: lawyerclaude-backend
+    restart: unless-stopped
+    command: ["python", "-m", "workers.pipeline_worker"]
+    env_file:
+      - ../.env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-credentials.json
+    volumes:
+      - ../secrets/google-credentials.json:/run/secrets/google-credentials.json:ro
+    networks:
+      - proxy
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Scheduler worker — reminders, trial expiry, manager reports.
+  # Exactly ONE instance across all hosts [C-VII].
+  # ---------------------------------------------------------------------------
+  worker-scheduler:
+    build:
+      context: ../backend
+    image: lawyerclaude-backend
+    restart: unless-stopped
+    command: ["python", "-m", "workers.scheduler_worker"]
+    env_file:
+      - ../.env
+    networks:
+      - proxy
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Next.js frontend — Arabic RTL dashboard.
+  # NEXT_PUBLIC_* values are baked into the bundle at build time.
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    image: lawyerclaude-frontend
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3000:3000"
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true   # created once on the host: docker network create proxy
