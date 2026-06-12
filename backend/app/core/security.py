@@ -88,16 +88,19 @@ def _decode_token(token: str) -> dict:
 
 
 async def load_user_by_auth_id(auth_user_id: str) -> CurrentUser:
-    """Fetch the profile row for a GoTrue subject; reject missing/inactive."""
+    """Fetch the profile row for a GoTrue subject; reject missing/inactive/suspended."""
     # Imported lazily to avoid a circular import: db.py depends on get_current_user.
     from app.core.db import db_connection
 
     async with db_connection(None, "auth:resolve") as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, auth_user_id, firm_id, full_name, email, phone, role::text AS role, status::text AS status
-            FROM users
-            WHERE auth_user_id = $1
+            SELECT u.id, u.auth_user_id, u.firm_id, u.full_name, u.email, u.phone,
+                   u.role::text AS role, u.status::text AS status,
+                   f.status::text AS firm_status
+            FROM users u
+            JOIN firms f ON f.id = u.firm_id
+            WHERE u.auth_user_id = $1
             """,
             UUID(auth_user_id),
         )
@@ -105,7 +108,11 @@ async def load_user_by_auth_id(auth_user_id: str) -> CurrentUser:
         raise ApiError(401, "unknown_user", "المستخدم غير مسجل في هذه المنشأة")
     if row["status"] != "active":
         raise ApiError(401, "inactive_user", "تم إيقاف هذا الحساب — تواصل مع مدير المكتب")
-    return CurrentUser(**dict(row))
+    # Suspended/cancelled firms: block all API access immediately (T020). [C-I]
+    if row["firm_status"] in ("suspended", "cancelled"):
+        raise ApiError(403, "firm_suspended", "تم إيقاف تشغيل المكتب — تواصل مع مشغّل المنصة")
+    data = {k: v for k, v in dict(row).items() if k != "firm_status"}
+    return CurrentUser(**data)
 
 
 async def get_current_user(

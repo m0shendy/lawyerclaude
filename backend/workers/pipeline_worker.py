@@ -79,6 +79,23 @@ async def _tick() -> None:
             logger.exception(
                 "pipeline_worker: unhandled exception for document %s", doc_id
             )
+    except Exception:
+        raise
+    else:
+        # Heartbeat on successful tick (US6 T030).
+        try:
+            async with db_connection(None, context="worker:pipeline:heartbeat") as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO worker_heartbeats (worker_name, last_beat, details)
+                    VALUES ('pipeline_worker', now(), $1::jsonb)
+                    ON CONFLICT (worker_name) DO UPDATE
+                       SET last_beat = now(), details = excluded.details
+                    """,
+                    '{"status":"ok"}',
+                )
+        except Exception:
+            logger.warning("pipeline_worker: failed to write heartbeat", exc_info=True)
     finally:
         # _run_tick() uses asyncio.run(), which creates a FRESH event loop every
         # tick. An asyncpg pool is bound to the loop that created it, so reusing

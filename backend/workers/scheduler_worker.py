@@ -79,6 +79,21 @@ async def _reminder_pass() -> None:
         ) as conn:
             released = await release_stale_checkouts(conn)
         logger.info("scheduler_worker: released %d stale checkout(s)", released)
+
+        # Heartbeat after a successful pass (US6 T030).
+        try:
+            async with db_connection(None, context="worker:scheduler:heartbeat") as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO worker_heartbeats (worker_name, last_beat, details)
+                    VALUES ('scheduler_worker', now(), $1::jsonb)
+                    ON CONFLICT (worker_name) DO UPDATE
+                       SET last_beat = now(), details = excluded.details
+                    """,
+                    '{"status":"ok"}',
+                )
+        except Exception:
+            logger.warning("scheduler_worker: failed to write heartbeat", exc_info=True)
     except Exception:
         # Never let one failing pass stop the scheduler.
         logger.exception("scheduler_worker: reminder pass failed")

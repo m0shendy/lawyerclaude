@@ -86,7 +86,72 @@ quarterly, restore the latest backup into a scratch Supabase project, run the
 isolation suite + `pytest` smoke against it, record the evidence in
 `docs/restore-tests.md`. An untested backup is not a backup.
 
-## 7. Operations quick reference
+## 7. Platform Operator Provisioning & Revocation
+
+The `/admin/*` console is accessible only to **platform operators** — distinct from all
+firm users. There is no public signup path for operators. Every operator must be
+provisioned manually by an existing operator or directly via the database.
+
+### 7.1 Provision a new operator
+
+```sql
+-- Step 1: create a GoTrue user (must use Supabase Dashboard or Management API)
+-- Dashboard → Authentication → Users → Invite / Create user
+-- Note the new user's UUID (auth.users.id) — call it <AUTH_UUID>
+
+-- Step 2: register in the allowlist
+INSERT INTO platform_operators (auth_user_id, display_name, is_active, created_by)
+VALUES ('<AUTH_UUID>', 'Operator Name', true, '<YOUR_AUTH_UUID>');
+```
+
+### 7.2 First login + TOTP enrollment
+
+1. Operator navigates to `/admin/login`.
+2. Enters email + password → backend proxies to GoTrue.
+3. If no TOTP factor enrolled yet: response has `mfa_enrollment_required: true` →
+   UI shows the QR code for enrollment (`POST /admin/mfa/enroll`).
+4. Operator scans QR with authenticator app and submits the 6-digit code
+   (`POST /admin/mfa/verify`) → receives `access_token`.
+5. Token is stored in `sessionStorage` (clears on tab close).
+
+**TOTP enrollment is mandatory.** A password-only (aal1) token is rejected by
+every `/admin/*` route. The console is unusable without a TOTP factor.
+
+### 7.3 Revoke a single operator session
+
+```sql
+-- From Supabase SQL editor or psql with service role:
+DELETE FROM operator_sessions WHERE operator_id = '<AUTH_UUID>';
+```
+
+Or use the console itself: **Settings → Revoke all sessions** button
+(`POST /admin/sessions/revoke-all` — terminates ALL operator sessions simultaneously,
+forcing re-authentication on next access).
+
+### 7.4 Deactivate an operator
+
+```sql
+UPDATE platform_operators SET is_active = false WHERE auth_user_id = '<AUTH_UUID>';
+-- Immediately blocks all future requests even if a session token exists.
+-- Does NOT delete the audit trail for past actions.
+```
+
+### 7.5 Emergency lockout (all operators)
+
+```sql
+-- Nuke all live sessions — forces re-auth for everyone:
+DELETE FROM operator_sessions;
+```
+
+### 7.6 Lockout policy
+
+Backend enforces: ≥ 5 failed password attempts within 15 minutes → 423 Locked.
+The lockout resets automatically when a successful login is recorded within the window,
+or after the 15-minute window passes with no new failures.
+
+---
+
+## 8. Operations quick reference
 
 * Suspend a firm now: `update firms set status='suspended' where slug=...;`
   (API returns 402-style responses; workers skip it next pass).

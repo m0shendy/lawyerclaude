@@ -154,6 +154,10 @@ def create_app() -> FastAPI:
     app.include_router(calendar.router,      tags=["calendar"])
     app.include_router(ai_doc.router,        tags=["ai-doc"])
 
+    # Platform admin console (feature 003) — operator-only, /admin/* prefix
+    from app.api import admin
+    app.include_router(admin.router)
+
     return app
 
 

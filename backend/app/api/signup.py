@@ -201,14 +201,11 @@ async def paymob_webhook(request: Request) -> dict[str, str]:
             )
             return {"status": "not_applied"}
 
-        # 5) Activate: subscription + firm status.
-        await conn.execute(
-            "UPDATE subscriptions SET plan=$2, provider='paymob', provider_sub_id=$3, "
-            "status='active', current_period_end = now() + interval '1 month', updated_at=now() "
-            "WHERE firm_id = $1",
-            firm_id, plan, txn_id,
+        # 5) Activate: subscription + firm status (shared path with manual payments).
+        from app.billing.activation import activate_subscription  # noqa: PLC0415
+        await activate_subscription(
+            conn, firm_id, plan, provider="paymob", provider_sub_id=str(txn_id)
         )
-        await conn.execute("UPDATE firms SET status='active' WHERE id = $1", firm_id)
         await conn.execute(
             "UPDATE billing_events SET processed_at = now() WHERE provider_ref = $1",
             f"txn-{txn_id}",

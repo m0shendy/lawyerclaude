@@ -1,5 +1,26 @@
 """Entity models — re-exported per conventions (T023)."""
 
+from app.models.admin import (  # noqa: F401  — platform admin (feature 003)
+    AdminLoginRequest,
+    AdminLoginResponse,
+    AdminMeResponse,
+    AdminMfaVerifyRequest,
+    AdminMfaVerifyResponse,
+    BillingEventResolutionResponse,
+    BillingEventResolveRequest,
+    ChangePlanRequest,
+    ConfirmRequest,
+    ExtendTrialRequest,
+    FirmDetail,
+    FirmListItem,
+    FirmStatusResponse,
+    FirmUsage,
+    ManualPaymentRequest,
+    ManualPaymentResponse,
+    PlanChangeResponse,
+    TrialExtendResponse,
+)
+
 from app.models.entities import (
     APPEAL_TYPES,
     AiOutput,
