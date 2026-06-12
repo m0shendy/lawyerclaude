@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _CASE_COLUMNS = (
-    "id, title, client_name, case_number, court, case_type, status, created_by, created_at"
+    "id, title, client_name, case_number, court, case_type, status, "
+    "practice_area, jurisdiction, opposing_counsel, docket_number, tags, "
+    "priority, stage, created_by, created_at"
 )
 
 
@@ -106,8 +108,10 @@ async def create_case(
     async with conn.transaction():
         row = await conn.fetchrow(
             f"""
-            INSERT INTO cases (firm_id, title, client_name, case_number, court, case_type, status, created_by)
-            VALUES ($8, $1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO cases (firm_id, title, client_name, case_number, court, case_type, status,
+                               practice_area, jurisdiction, opposing_counsel, docket_number,
+                               tags, priority, stage, created_by)
+            VALUES ($15, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING {_CASE_COLUMNS}
             """,
             body.title,
@@ -116,6 +120,13 @@ async def create_case(
             body.court,
             body.case_type,
             body.status,
+            body.practice_area,
+            body.jurisdiction,
+            body.opposing_counsel,
+            body.docket_number,
+            body.tags,
+            body.priority,
+            body.stage,
             user.id,
             user.firm_id,
         )

@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 
-# ---- deps: install node_modules ----
-FROM node:20-alpine AS deps
+# ---- deps: install node_modules (glibc image so SWC gnu binary works at build time) ----
+FROM node:20 AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # ---- build: compile the Next.js standalone output ----
-FROM node:20-alpine AS build
+FROM node:20 AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

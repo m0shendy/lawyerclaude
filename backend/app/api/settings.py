@@ -40,8 +40,9 @@ _SECRET_COLS = {"waha_key", "llm_api_key"}
 
 _ALL_COLS = (
     "id, firm_name, locale, waha_url, waha_key, llm_api_key, "
+    "llm_provider_config, checkout_timeout_hours, "
     "embedding_config, reminder_lead_points, feature_appeal_deadlines, "
-    "subscription_metadata, created_at, updated_at"
+    "feature_client_portal, subscription_metadata, created_at, updated_at"
 )
 
 
@@ -52,9 +53,12 @@ class SettingsOut(BaseModel):
     waha_url: str | None
     waha_key_set: bool
     llm_api_key_set: bool
+    llm_provider_config: dict[str, Any]
+    checkout_timeout_hours: int
     embedding_config: dict[str, Any]
     reminder_lead_points: list[str]
     feature_appeal_deadlines: bool
+    feature_client_portal: bool
     subscription_metadata: dict[str, Any]
     created_at: str
     updated_at: str
@@ -66,9 +70,12 @@ class SettingsUpdate(BaseModel):
     waha_url: str | None = None
     waha_key: str | None = None         # set to "" to clear; "••••" = leave unchanged
     llm_api_key: str | None = None      # same sentinel behaviour
+    llm_provider_config: dict[str, Any] | None = None  # {provider, model} — key stays in llm_api_key
+    checkout_timeout_hours: int | None = None
     embedding_config: dict[str, Any] | None = None
     reminder_lead_points: list[str] | None = None
     feature_appeal_deadlines: bool | None = None
+    feature_client_portal: bool | None = None
 
 
 def _row_to_out(row) -> SettingsOut:
@@ -98,9 +105,12 @@ def _row_to_out(row) -> SettingsOut:
         waha_url=d.get("waha_url"),
         waha_key_set=bool(d.get("waha_key")),
         llm_api_key_set=bool(d.get("llm_api_key")),
+        llm_provider_config=_ensure_dict(d.get("llm_provider_config")),
+        checkout_timeout_hours=int(d.get("checkout_timeout_hours") or 24),
         embedding_config=_ensure_dict(d.get("embedding_config")),
         reminder_lead_points=_ensure_list(d.get("reminder_lead_points")),
         feature_appeal_deadlines=bool(d.get("feature_appeal_deadlines")),
+        feature_client_portal=bool(d.get("feature_client_portal")),
         subscription_metadata=_ensure_dict(d.get("subscription_metadata")),
         created_at=str(d["created_at"]),
         updated_at=str(d["updated_at"]),
@@ -140,6 +150,12 @@ async def update_settings(
             del updates[col]
 
     # Serialize jsonb fields to JSON string for asyncpg.
+    if "llm_provider_config" in updates:
+        cfg = updates["llm_provider_config"]
+        # Defence in depth: never accept a key inside the config blob —
+        # the secret lives only in llm_api_key (audit-redacted) [C-III].
+        cfg.pop("api_key", None)
+        updates["llm_provider_config"] = json.dumps(cfg)
     if "embedding_config" in updates:
         updates["embedding_config"] = json.dumps(updates["embedding_config"])
     if "reminder_lead_points" in updates:
@@ -169,3 +185,48 @@ async def update_settings(
         [k for k in updates if k not in _SECRET_COLS]
     )
     return _row_to_out(row)
+
+
+# ── LLM provider test connection (spec 002 FR-141) ────────────────────────────
+
+
+class LlmTestResponse(BaseModel):
+    ok: bool
+    provider: str
+    model: str
+    latency_ms: int
+
+
+@router.post("/settings/llm-provider/test", response_model=LlmTestResponse)
+async def test_llm_provider(
+    conn: Db,
+    _manager: Annotated[CurrentUser, ManagerDep],
+) -> LlmTestResponse:
+    """Dispatch a tiny test prompt via the configured provider; report latency.
+
+    The key is read server-side from firm_settings and never echoed. [C-III]
+    """
+    import time
+
+    from app.llm.generate import LlmError
+    from app.llm.providers import dispatch, load_llm_context
+
+    api_key, cfg = await load_llm_context(conn)
+    started = time.monotonic()
+    try:
+        await dispatch(
+            "أجب بكلمة واحدة فقط: جاهز",
+            api_key=api_key,
+            provider_config=cfg,
+            max_output_tokens=16,
+            timeout=30.0,
+        )
+    except LlmError as exc:
+        raise ApiError(502, "llm_test_failed", str(exc)) from exc
+    latency_ms = int((time.monotonic() - started) * 1000)
+    return LlmTestResponse(
+        ok=True,
+        provider=str(cfg.get("provider", "")),
+        model=str(cfg.get("model", "")),
+        latency_ms=latency_ms,
+    )

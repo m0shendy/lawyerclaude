@@ -211,7 +211,7 @@ async def _search_private(
                 rc.chunk_text,
                 rc.page_ref,
                 rc.source_location,
-                1 - (rc.embedding <=> $1::vector) AS similarity
+                GREATEST(0.0, LEAST(1.0, 1 - (rc.embedding <=> $1::vector))) AS similarity
             FROM reference_chunks rc
             JOIN references_private rp ON rp.id = rc.reference_id
             ORDER BY rc.embedding <=> $1::vector
@@ -266,7 +266,7 @@ async def _search_shared(vec_literal: str, *, top_k: int) -> list[RetrievedChunk
                 cc.chunk_text,
                 cc.page_ref,
                 cc.source_location,
-                1 - (cc.embedding <=> $1::vector) AS similarity
+                GREATEST(0.0, LEAST(1.0, 1 - (cc.embedding <=> $1::vector))) AS similarity
             FROM corpus_chunks cc
             ORDER BY cc.embedding <=> $1::vector
             LIMIT $2

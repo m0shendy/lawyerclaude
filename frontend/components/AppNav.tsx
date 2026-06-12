@@ -1,7 +1,6 @@
 'use client'
 
-// Role-aware sidebar navigation (RTL). Screens declare roles per
-// contracts/ui-screens.md; the nav mirrors them (server still enforces).
+// Role-aware sidebar navigation (RTL).
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -18,17 +17,26 @@ interface NavItem {
 const ALL: Role[] = ['partner_manager', 'lawyer', 'paralegal', 'secretary']
 
 const NAV: NavItem[] = [
-  { href: '/dashboard', label: 'لوحة المتابعة', roles: ALL },
-  { href: '/cases', label: 'القضايا', roles: ALL },
-  { href: '/documents', label: 'المستندات', roles: ALL },
-  { href: '/ai-review', label: 'مراجعة مخرجات الذكاء الاصطناعي', roles: ALL },
-  { href: '/deadlines', label: 'المواعيد والالتزامات', roles: ALL },
-  { href: '/tasks', label: 'المهام', roles: ['partner_manager', 'lawyer', 'paralegal'] },
-  { href: '/assistant', label: 'المساعد الذكي', roles: ALL },
-  { href: '/reports', label: 'التقارير', roles: ['partner_manager'] },
-  { href: '/users', label: 'المستخدمون والأدوار', roles: ['partner_manager'] },
-  { href: '/audit', label: 'سجل التدقيق', roles: ['partner_manager'] },
-  { href: '/settings', label: 'الإعدادات', roles: ['partner_manager'] },
+  { href: '/dashboard',  label: 'لوحة المتابعة',       roles: ALL },
+  { href: '/calendar',   label: 'التقويم',              roles: ALL },
+  { href: '/cases',      label: 'القضايا',              roles: ALL },
+  { href: '/hearings',   label: 'الجلسات',              roles: ALL },
+  { href: '/appointments', label: 'مواعيد العملاء',     roles: ALL },
+  { href: '/contacts',   label: 'الأطراف والجهات',      roles: ALL },
+  { href: '/documents',  label: 'المستندات',            roles: ALL },
+  { href: '/templates',  label: 'نماذج المستندات',      roles: ALL },
+  { href: '/ai-tools',   label: 'أدوات الذكاء للمستندات', roles: ['partner_manager', 'lawyer', 'paralegal'] },
+  { href: '/deadlines',  label: 'المواعيد القانونية',   roles: ALL },
+  { href: '/tasks',      label: 'المهام',               roles: ['partner_manager', 'lawyer', 'paralegal'] },
+  { href: '/billing',    label: 'الفواتير والأتعاب',    roles: ['partner_manager', 'secretary'] },
+  { href: '/ai-review',  label: 'مراجعة الذكاء',       roles: ALL },
+  { href: '/assistant',  label: 'المساعد الذكي',        roles: ALL },
+  { href: '/references', label: 'المراجع القانونية',    roles: ALL },
+  { href: '/analytics',  label: 'التقارير المالية',     roles: ['partner_manager'] },
+  { href: '/reports',    label: 'التقارير الإدارية',    roles: ['partner_manager'] },
+  { href: '/users',      label: 'المستخدمون',           roles: ['partner_manager'] },
+  { href: '/audit',      label: 'سجل التدقيق',          roles: ['partner_manager'] },
+  { href: '/settings',   label: 'الإعدادات',            roles: ['partner_manager'] },
 ]
 
 export default function AppNav() {

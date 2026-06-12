@@ -12,13 +12,13 @@ import type { Me, Role } from './types'
 interface UserContextValue {
   user: Me | null
   loading: boolean
-  refresh: () => Promise<void>
+  refresh: () => Promise<Me | null>
 }
 
 const UserContext = createContext<UserContextValue>({
   user: null,
   loading: true,
-  refresh: async () => {},
+  refresh: async () => null,
 })
 
 export function UserProvider({ children }: { children: ReactNode }) {
@@ -30,18 +30,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const session = await getSession()
       if (!session) {
         setUser(null)
-        return
+        return null
       }
-      setUser(await apiGet<Me>('/me'))
-    } catch {
+      const me = await apiGet<Me>('/me')
+      setUser(me)
+      return me
+    } catch (e) {
       setUser(null)
+      throw e
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    void refresh()
+    refresh().catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -17,6 +17,9 @@
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },
+  "optionalDependencies": {
+    "@next/swc-linux-x64-musl": "14.2.35"
+  },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.0",
     "@testing-library/react": "^16.0.0",

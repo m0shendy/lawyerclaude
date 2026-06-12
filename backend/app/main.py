@@ -96,21 +96,34 @@ def create_app() -> FastAPI:
     # Router includes — paths follow contracts/rest-api.md (no /api/v1 prefix).
     # ------------------------------------------------------------------
     from app.api import (
+        ai_doc,
         ai_outputs,
+        analytics,
+        appointments,
         assignments,
         assistant,
         audit,
         auth,
+        billing,
+        calendar,
         cases,
+        contacts,
+        correspondence,
         deadlines,
+        dms,
         documents,
+        hearings,
+        portal,
+        references,
         reports,
         settings,
         signup,
         tasks,
+        templates,
         users,
     )
 
+    # Core
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(cases.router)
@@ -121,9 +134,25 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router)
     app.include_router(reports.router)
     app.include_router(assistant.router)
+    app.include_router(references.router)
     app.include_router(settings.router)
     app.include_router(audit.router)
     app.include_router(signup.router)
+
+    # Expansion modules (Phase 14–21)
+    app.include_router(contacts.router,      tags=["contacts"])
+    app.include_router(billing.router,       tags=["billing"])
+    app.include_router(hearings.router,      tags=["hearings"])
+    app.include_router(templates.router,     tags=["templates"])
+    app.include_router(correspondence.router, tags=["correspondence"])
+    app.include_router(analytics.router,     tags=["analytics"])
+    app.include_router(portal.router)  # prefix="/portal" set in router
+
+    # Spec 002 gap modules (DMS, appointments, calendar, AI doc features)
+    app.include_router(dms.router,           tags=["dms"])
+    app.include_router(appointments.router,  tags=["appointments"])
+    app.include_router(calendar.router,      tags=["calendar"])
+    app.include_router(ai_doc.router,        tags=["ai-doc"])
 
     return app
 

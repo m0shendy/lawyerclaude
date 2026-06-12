@@ -38,6 +38,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Claude Code tooling state
+.claude/
+
 # Backups & data
 infra/backup/output/
 supabase/volumes/

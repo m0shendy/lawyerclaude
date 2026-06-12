@@ -15,6 +15,7 @@ dependencies = [
     "python-multipart",
     "apscheduler",
     "google-auth[requests]",  # service-account auth for Document AI REST calls
+    "litellm>=1.61",          # multi-provider LLM dispatch (spec 002 FR-141)
 ]
 
 [dependency-groups]

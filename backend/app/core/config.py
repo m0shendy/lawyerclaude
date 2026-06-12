@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # Scheduler (Component C) — deterministic reminders/reports [C-IV]
     scheduler_reminder_hour: int = 8  # firm-local hour for the daily reminder pass
     waha_session: str = "default"  # WAHA Plus session name (per-firm tenant id)
+    # Optional shared secret for the inbound WAHA webhook. When set, the webhook
+    # rejects calls whose X-Webhook-Token header does not match. [C-I]
+    waha_webhook_token: str = ""
 
     # CORS
     cors_origins: str = "*"

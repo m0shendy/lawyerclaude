@@ -33,6 +33,9 @@ const TYPE_LABELS: Record<AiOutputType, string> = {
   analysis: 'تحليل',
   clause_flag: 'تنبيه بند',
   risk_signal: 'إشارة مخاطرة',
+  doc_draft: 'مسودة مستند',
+  letter_pack: 'حزمة خطابات',
+  case_timeline: 'خط زمني للقضية',
 }
 
 const STATE_BADGE: Record<ReviewState, { cls: string; label: string }> = {

@@ -9,8 +9,11 @@ import AppShell from '@/components/AppShell'
 import { RequireRole, useUser } from '@/lib/rbac'
 import { apiGet, apiPost, apiPatch, apiDelete, ApiError } from '@/lib/api'
 import {
+  PRIORITY_COLORS,
+  PRIORITY_LABELS,
   TASK_STATUS_LABELS,
   type Case,
+  type Priority,
   type Role,
   type TaskItem,
   type TaskStatus,
@@ -32,6 +35,7 @@ interface CaseDetail extends Case {
 
 const TASK_ROLES: Role[] = ['partner_manager', 'lawyer', 'paralegal']
 const STATUSES: TaskStatus[] = ['open', 'in_progress', 'done', 'cancelled']
+const PRIORITIES: Priority[] = ['high', 'medium', 'low']
 
 function TasksScreen() {
   const { user } = useUser()
@@ -47,6 +51,8 @@ function TasksScreen() {
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [assignee, setAssignee] = useState('')
+  const [priority, setPriority] = useState<Priority>('medium')
+  const [priorityFilter, setPriorityFilter] = useState<Priority | ''>('')
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -96,6 +102,7 @@ function TasksScreen() {
         description,
         assigned_to: assignee,
         due_date: dueDate || null,
+        priority,
       })
       setDescription('')
       setDueDate('')
@@ -211,6 +218,23 @@ function TasksScreen() {
                 className="w-full rounded border border-gray-300 px-3 py-2"
               />
             </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium" htmlFor="priority">
+                الأولوية
+              </label>
+              <select
+                id="priority"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as Priority)}
+                className="w-full rounded border border-gray-300 bg-white px-3 py-2"
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {PRIORITY_LABELS[p]}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="sm:col-span-2">
               <button
                 type="submit"
@@ -227,7 +251,36 @@ function TasksScreen() {
 
       {selectedCaseId && (
         <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-          <h2 className="border-b border-gray-100 px-5 py-3 font-semibold">مهام القضية</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-5 py-3">
+            <h2 className="font-semibold">مهام القضية</h2>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPriorityFilter('')}
+                className={`rounded-full px-3 py-1 text-xs ${
+                  priorityFilter === ''
+                    ? 'bg-blue-700 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                كل الأولويات
+              </button>
+              {PRIORITIES.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPriorityFilter(p)}
+                  className={`rounded-full px-3 py-1 text-xs ${
+                    priorityFilter === p
+                      ? 'bg-blue-700 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {PRIORITY_LABELS[p]}
+                </button>
+              ))}
+            </div>
+          </div>
           {detailLoading ? (
             <p className="p-5 text-sm text-gray-500">جارٍ التحميل…</p>
           ) : !detail || detail.tasks.length === 0 ? (
@@ -237,6 +290,7 @@ function TasksScreen() {
               <thead>
                 <tr className="border-b border-gray-100 text-right text-xs text-gray-500">
                   <th className="px-5 py-2 font-medium">الوصف</th>
+                  <th className="px-5 py-2 font-medium">الأولوية</th>
                   <th className="px-5 py-2 font-medium">المُكلَّف</th>
                   <th className="px-5 py-2 font-medium">الاستحقاق</th>
                   <th className="px-5 py-2 font-medium">الحالة</th>
@@ -244,9 +298,18 @@ function TasksScreen() {
                 </tr>
               </thead>
               <tbody>
-                {detail.tasks.map((t) => (
+                {detail.tasks
+                  .filter((t) => !priorityFilter || t.priority === priorityFilter)
+                  .map((t) => (
                   <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium">{t.description}</td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORITY_COLORS[t.priority ?? 'medium']}`}
+                      >
+                        {PRIORITY_LABELS[t.priority ?? 'medium']}
+                      </span>
+                    </td>
                     <td className="px-5 py-3 text-gray-600">{nameOf(t.assigned_to)}</td>
                     <td className="px-5 py-3 text-gray-600" dir="ltr">
                       {t.due_date ?? '—'}

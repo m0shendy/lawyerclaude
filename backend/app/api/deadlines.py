@@ -24,11 +24,12 @@ Constitution invariants
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from app.core.db import Db
 from app.core.errors import ApiError
@@ -36,6 +37,7 @@ from app.core.flags import require_flag
 from app.core.rbac import LAWYER, MANAGER, assert_case_access, require_roles
 from app.core.security import CurrentUser, CurrentUserDep
 from app.models import Deadline, DeadlineCreate, DeadlineUpdate
+from app.scheduler.appeal_deadlines import suggest_appeal_deadlines
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,74 @@ async def create_deadline(
         user.firm_id,
     )
     return _row(row)
+
+
+# ── POST /cases/{id}/deadlines/appeal-suggestions (T077) [C-X] ────────────────
+
+
+class AppealSuggestRequest(BaseModel):
+    judgment_date: date
+    responsible_user_id: UUID
+    derived_from_document_id: UUID | None = None
+    low_confidence_flag: bool = False
+
+
+@router.post(
+    "/cases/{case_id}/deadlines/appeal-suggestions",
+    response_model=list[Deadline],
+    status_code=201,
+)
+async def generate_appeal_suggestions(
+    case_id: UUID,
+    body: AppealSuggestRequest,
+    conn: Db,
+    user: Annotated[CurrentUser, Depends(require_roles(MANAGER, LAWYER))],
+) -> list[Deadline]:
+    """Generate appeal-deadline **suggestions** (``confirmed=false``) for a case. [C-X]
+
+    Double-gated: the ``feature_appeal_deadlines`` flag must be on AND the
+    expert-supplied appeal periods must be populated (they are EMPTY until expert
+    sign-off — see ``scheduler/appeal_deadlines.py``). Until then this returns an
+    empty list. Suggestions never notify until the responsible lawyer confirms.
+    """
+    await require_flag(conn, "feature_appeal_deadlines")
+    await assert_case_access(conn, user, case_id)
+
+    target = await conn.fetchrow(
+        "SELECT id, status FROM users WHERE id = $1", body.responsible_user_id
+    )
+    if target is None:
+        raise ApiError(404, "not_found", "المستخدم المسؤول غير موجود")
+    if target["status"] != "active":
+        raise ApiError(400, "invalid", "لا يمكن إسناد الموعد لمستخدم غير نشط")
+
+    suggestions = suggest_appeal_deadlines(
+        body.judgment_date,
+        responsible_user_id=body.responsible_user_id,
+        derived_from_document_id=body.derived_from_document_id,
+        low_confidence_flag=body.low_confidence_flag,
+    )
+
+    created: list[Deadline] = []
+    for s in suggestions:
+        row = await conn.fetchrow(
+            f"""
+            INSERT INTO deadlines
+                (case_id, type, title, basis, due_date, suggested_date, confirmed,
+                 responsible_user_id, derived_from_document_id, low_confidence_flag)
+            VALUES ($1, $2, $3, $4, $5, $6, false, $7, $8, $9)
+            RETURNING {_DEADLINE_COLS}
+            """,
+            case_id, s["type"], s["title"], s["basis"], s["due_date"],
+            s["suggested_date"], s["responsible_user_id"],
+            s["derived_from_document_id"], s["low_confidence_flag"],
+        )
+        created.append(_row(row))
+
+    logger.info(
+        "appeal suggestions generated: case=%s count=%d (flag on)", case_id, len(created)
+    )
+    return created
 
 
 # ── PATCH /deadlines/{id} ─────────────────────────────────────────────────────

@@ -5,10 +5,12 @@
 // links grid, manager-only admin links row. Deadline/task/review summaries
 // arrive in later phases (no aggregation endpoints yet) — shown as "قريباً".
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
+import { apiGet } from '@/lib/api'
 import { ALL_ROLES, MANAGER_ONLY, RequireRole, useUser } from '@/lib/rbac'
-import { ROLE_LABELS, type Case, type Role } from '@/lib/types'
+import { ROLE_LABELS, type Case, type Invoice, type Role } from '@/lib/types'
 
 interface QuickLink {
   href: string
@@ -103,6 +105,46 @@ function PlaceholderCard({ title }: { title: string }) {
   )
 }
 
+// spec 002 KPI cards: upcoming hearings (7 days) + pending invoices.
+function ExpansionKpiCards({ isManager }: { isManager: boolean }) {
+  const [hearingCount, setHearingCount] = useState<number | null>(null)
+  const [invoiceCount, setInvoiceCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    apiGet<unknown[]>('/hearings/upcoming?days=7')
+      .then((rows) => setHearingCount(rows.length))
+      .catch(() => setHearingCount(null))
+    if (isManager) {
+      apiGet<Invoice[]>('/invoices')
+        .then((rows) =>
+          setInvoiceCount(rows.filter((i) => i.status === 'sent' || i.status === 'partial' || i.status === 'overdue').length)
+        )
+        .catch(() => setInvoiceCount(null))
+    }
+  }, [isManager])
+
+  return (
+    <>
+      <Link
+        href="/hearings"
+        className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-blue-300"
+      >
+        <h2 className="mb-1 font-bold">جلسات الأسبوع القادم</h2>
+        <p className="text-3xl font-bold text-violet-700">{hearingCount ?? '—'}</p>
+      </Link>
+      {isManager && (
+        <Link
+          href="/billing/invoices"
+          className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-blue-300"
+        >
+          <h2 className="mb-1 font-bold">فواتير غير مسددة</h2>
+          <p className="text-3xl font-bold text-amber-700">{invoiceCount ?? '—'}</p>
+        </Link>
+      )}
+    </>
+  )
+}
+
 function LinksGrid({ links }: { links: QuickLink[] }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -133,6 +175,10 @@ function DashboardContent() {
         <h1 className="text-2xl font-bold">مرحباً، {user.full_name}</h1>
         <p className="mt-1 text-sm text-gray-500">{ROLE_LABELS[user.role]}</p>
       </header>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <ExpansionKpiCards isManager={isManager} />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <AssignedCasesCard cases={user.assigned_cases} />
