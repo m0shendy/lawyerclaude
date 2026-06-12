@@ -4,7 +4,7 @@
 // Talks only to the backend (/admin/login, /admin/mfa/verify).
 // Never touches Supabase GoTrue directly from the browser. [C-I]
 
-import { useState, type FormEvent, useEffect } from 'react'
+import { useState, type FormEvent, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { adminFetch, adminPost, setOperatorToken } from '@/lib/adminApi'
 
@@ -16,7 +16,7 @@ interface LoginState {
   enrollToken: string   // aal1 token when enrollment is required
 }
 
-export default function AdminLoginPage() {
+function AdminLoginInner() {
   const searchParams = useSearchParams()
   const notice = searchParams.get('notice')
 
@@ -198,5 +198,13 @@ export default function AdminLoginPage() {
         </button>
       </form>
     </div>
+  )
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense>
+      <AdminLoginInner />
+    </Suspense>
   )
 }
