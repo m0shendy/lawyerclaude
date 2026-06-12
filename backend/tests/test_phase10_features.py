@@ -62,7 +62,7 @@ async def test_resolve_rejects_unknown_sender() -> None:
 
 async def test_resolve_rejects_inactive_user() -> None:
     row = {
-        "id": uuid4(), "auth_user_id": uuid4(), "full_name": "س", "email": "e@x.co",
+        "id": uuid4(), "firm_id": uuid4(), "auth_user_id": uuid4(), "full_name": "س", "email": "e@x.co",
         "phone": "+201001234567", "role": "lawyer", "status": "inactive",
     }
     assert await _resolve_active_user(_RowConn(row), "201001234567") is None
@@ -70,7 +70,7 @@ async def test_resolve_rejects_inactive_user() -> None:
 
 async def test_resolve_accepts_active_user() -> None:
     row = {
-        "id": uuid4(), "auth_user_id": uuid4(), "full_name": "س", "email": "e@x.co",
+        "id": uuid4(), "firm_id": uuid4(), "auth_user_id": uuid4(), "full_name": "س", "email": "e@x.co",
         "phone": "+201001234567", "role": "lawyer", "status": "active",
     }
     user = await _resolve_active_user(_RowConn(row), "201001234567")
@@ -91,13 +91,13 @@ async def test_webhook_rejects_bad_token() -> None:
 
 
 async def test_webhook_ignores_own_messages() -> None:
-    # No token configured → token gate passes; fromMe short-circuits before any DB.
-    fake_settings = mock.Mock(waha_webhook_token="", waha_session="default")
+    fake_settings = mock.Mock(waha_webhook_token="s3cret", waha_session="default")
     with mock.patch("app.api.assistant.get_settings", return_value=fake_settings):
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/assistant/whatsapp/webhook",
+                headers={"X-Webhook-Token": "s3cret"},
                 json={"event": "message", "payload": {"fromMe": True, "from": "201@c.us", "body": "x"}},
             )
     assert resp.status_code == 200 and resp.json()["status"] == "ignored"

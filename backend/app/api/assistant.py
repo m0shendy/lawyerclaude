@@ -115,6 +115,7 @@ async def assistant_query(
     if body.save_as_draft:
         saved_id = await _save_as_draft(
             conn,
+            firm_id=user.firm_id,
             case_id=body.case_id,
             query=body.query,
             answer=answer,
@@ -260,6 +261,7 @@ async def whatsapp_webhook(
         ]
         output_id = await _save_as_draft(
             conn,
+            firm_id=user.firm_id,
             case_id=None,
             query=text,
             answer=answer,
@@ -278,6 +280,7 @@ async def whatsapp_webhook(
 async def _save_as_draft(
     conn,
     *,
+    firm_id: UUID,
     case_id: UUID | None,
     query: str,
     answer: str,
@@ -306,7 +309,7 @@ async def _save_as_draft(
         json.dumps(content, ensure_ascii=False),
         json.dumps(source_links, ensure_ascii=False),
         model,
-        user.firm_id,
+        firm_id,
     )
     logger.info("assistant: saved draft output=%s case=%s", output_id, case_id)
     return output_id

@@ -5,12 +5,11 @@
 // here because they don't exist in this instance's GoTrue. [C-I]
 
 import { useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+
 import { signInWithPassword } from '@/lib/supabase'
 import { useUser } from '@/lib/rbac'
 
 export default function LoginPage() {
-  const router = useRouter()
   const { refresh } = useUser()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -23,8 +22,9 @@ export default function LoginPage() {
     setBusy(true)
     try {
       await signInWithPassword(email, password)
-      await refresh() // /me also rejects inactive users
-      router.replace('/dashboard')
+      const user = await refresh() // /me also rejects inactive users
+      if (!user) throw new Error('Inactive user')
+      window.location.href = '/dashboard'
     } catch {
       setError('بيانات الدخول غير صحيحة أو الحساب موقوف')
     } finally {
